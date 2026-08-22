@@ -194,6 +194,79 @@ export function renderCalendar(onDateSelect) {
     }
 }
 
+export function changeMonth(step, onDateSelect) { 
+    STATE.calMonth += step; 
+    if (STATE.calMonth < 0) { 
+        STATE.calMonth = 11; 
+        STATE.calYear--; 
+    } else if (STATE.calMonth > 11) { 
+        STATE.calMonth = 0; 
+        STATE.calYear++; 
+    } 
+    renderCalendar(onDateSelect); 
+}
+
+// --- 📋 日次サマリーモーダル ---
+export function showDailySummary(dateStr, log, onCommentRead) {
+    const parts = dateStr.split('-'); 
+    const sumModalDate = document.getElementById('summary-modal-date'); 
+    if(sumModalDate) sumModalDate.textContent = `${parts[1]}/${parts[2]} の記録`; 
+    const content = document.getElementById('summary-modal-content'); 
+    const editBtn = document.getElementById('edit-daily-btn');
+    if(!content || !editBtn) return;
+    
+    if (!log) { 
+        content.innerHTML = '<p class="text-center" style="color:var(--text-muted); margin: 40px 0; font-weight:800; font-size:16px;">この日の記録はまだありません。</p>'; 
+        editBtn.textContent = '新規入力する'; 
+    } else {
+        editBtn.textContent = 'この日のデータを編集する'; 
+        let sprintHtml = ''; 
+        if(log.sprintLogs && log.sprintLogs.length > 0) { 
+            sprintHtml = log.sprintLogs.map(s => `<span style="background:var(--primary); color:white; padding:4px 10px; border-radius:8px; font-size:12px; font-weight:bold; display:inline-block; margin-right:6px; box-shadow:var(--shadow-sm);">🏃‍♂️ ${s.distance}m: ${s.time}s</span>`).join(' '); 
+        }
+        const sorenessPre = log.soreness ? `<div style="font-size:14px; color:var(--secondary); font-weight:800; margin-bottom:6px;">[朝の張り] ${log.soreness}</div>` : ''; 
+        const sorenessPost = log.sorenessPost ? `<div style="font-size:14px; color:var(--primary); font-weight:800;">[夜の張り] ${log.sorenessPost}</div>` : ''; 
+        const injuryPre = log.injuryPre ? `<div style="margin-top:12px; background:var(--input-bg); border:1px solid var(--warning-text); padding:14px; border-radius:12px;"><b style="color:var(--warning-text); font-size:13px;">⚠️ 朝のケガ詳細:</b><div style="font-size:14px; color:var(--text-main); white-space:pre-wrap; margin-top:6px; font-weight:600;">${log.injuryPre}</div></div>` : ''; 
+        const injuryPost = log.injury ? `<div style="margin-top:12px; background:var(--input-bg); border:1px solid var(--warning-text); padding:14px; border-radius:12px;"><b style="color:var(--warning-text); font-size:13px;">⚠️ 夜のケガ詳細:</b><div style="font-size:14px; color:var(--text-main); white-space:pre-wrap; margin-top:6px; font-weight:600;">${log.injury}</div></div>` : '';
+        let coachFeedbackHtml = '';
+        if (log.coachComment) { 
+            coachFeedbackHtml = `<div style="margin-bottom:24px; background:linear-gradient(135deg, var(--secondary-light), var(--primary-light)); border:1px solid var(--primary-alpha); padding:18px; border-radius:16px; box-shadow: var(--shadow-sm);"><div style="font-size:14px; color:var(--primary-dark); font-weight:900; margin-bottom:10px; display:flex; align-items:center; gap:6px;">💬 コーチからのフィードバック</div><div style="display:flex; gap:12px; align-items:flex-start;"><div style="font-size:36px; line-height:1; text-shadow:0 2px 4px rgba(0,0,0,0.2);">${log.coachComment.stamp || ''}</div><div style="font-size:15px; color:var(--text-main); font-weight:700; white-space:pre-wrap; padding-top:6px;">${log.coachComment.text || ''}</div></div></div>`; 
+            if (!log.playerReadComment && onCommentRead) onCommentRead(log.date); 
+        }
+        content.innerHTML = `${coachFeedbackHtml}<div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:24px;"><div style="background:var(--input-bg); border:1px solid var(--border-color); padding:16px; border-radius:14px; text-align:center; box-shadow:var(--shadow-sm);"><div style="font-size:13px; color:var(--text-muted); font-weight:800; margin-bottom:4px;">疲労度 (朝)</div><div style="font-size:26px; font-weight:900; color:var(--text-main);">${log.fatigue || '-'} <span style="font-size:14px; font-weight:bold; color:var(--text-muted);">/10</span></div></div><div style="background:var(--input-bg); border:1px solid var(--border-color); padding:16px; border-radius:14px; text-align:center; box-shadow:var(--shadow-sm);"><div style="font-size:13px; color:var(--text-muted); font-weight:800; margin-bottom:4px;">Training Load</div><div style="font-size:26px; font-weight:900; color:var(--secondary);">${log.trainingLoad || '-'}</div></div></div><div style="margin-bottom:24px; background:var(--input-bg); border:1px solid var(--border-color); padding:18px; border-radius:16px;"><div style="font-size:14px; color:var(--primary); font-weight:900; margin-bottom:10px;">🏃‍♂️ スプリント・特殊計測</div><div style="margin-bottom:10px;">${sprintHtml || '<span style="font-size:14px; color:var(--text-muted); font-weight:600;">データなし</span>'}</div><div style="font-size:14px; font-weight:700; color:var(--text-main);">RSI: <b style="font-size:16px;">${log.rsi || '-'}</b> <span style="color:var(--border-color); margin:0 8px;">|</span> F-v: <b style="font-size:16px;">${log.fvResult || '-'}</b></div></div><div style="margin-bottom:24px; border-top:2px dashed var(--border-color); padding-top:24px;"><div style="font-size:15px; color:var(--text-main); font-weight:900; margin-bottom:10px;">⚡ 筋肉痛・張り</div>${sorenessPre}${sorenessPost}${!sorenessPre && !sorenessPost ? '<span style="font-size:14px; color:var(--text-muted); font-weight:600;">なし</span>' : ''}${injuryPre}${injuryPost}</div><div style="margin-bottom:24px; border-top:2px dashed var(--border-color); padding-top:24px;"><div style="font-size:15px; color:var(--text-main); font-weight:900; margin-bottom:10px;">💤 睡眠・体調</div><div style="font-size:15px; font-weight:600; margin-bottom:6px; color:var(--text-main);">時間: <b>${log.sleep || '-'}h</b> / 質: <b style="color:var(--secondary);">${log.sleepQuality ? '★'.repeat(log.sleepQuality) : '-'}</b></div><div style="font-size:15px; font-weight:600; color:var(--text-main);">体重: <b>${log.weight ? log.weight+'kg' : '-'}</b> / 心拍: <b>${log.heartRate || '-'}</b></div></div><div style="border-top:2px dashed var(--border-color); padding-top:24px; padding-bottom:10px;"><div style="font-size:15px; color:var(--text-main); font-weight:900; margin-bottom:12px;">📝 練習振り返り・ケア</div><div style="font-size:15px; background:var(--card-bg); color:var(--text-main); border:1px solid var(--border-color); padding:14px; border-radius:12px; margin-bottom:12px; white-space:pre-wrap; font-weight:600; box-shadow:var(--shadow-sm);"><b style="color:var(--primary); font-size:13px; display:block; margin-bottom:4px;">メニュー:</b>${log.menu || '-'}</div><div style="font-size:15px; background:var(--card-bg); color:var(--text-main); border:1px solid var(--border-color); padding:14px; border-radius:12px; margin-bottom:12px; white-space:pre-wrap; font-weight:600; box-shadow:var(--shadow-sm);"><b style="color:var(--good-text); font-size:13px; display:block; margin-bottom:4px;">👍 できたこと:</b>${log.good || '-'}</div><div style="font-size:15px; background:var(--card-bg); color:var(--text-main); border:1px solid var(--border-color); padding:14px; border-radius:12px; margin-bottom:12px; white-space:pre-wrap; font-weight:600; box-shadow:var(--shadow-sm);"><b style="color:var(--warning-text); font-size:13px; display:block; margin-bottom:4px;">👎 課題・できなかったこと:</b>${log.bad || '-'}</div><div style="font-size:15px; background:var(--card-bg); color:var(--text-main); border:1px solid var(--border-color); padding:14px; border-radius:12px; white-space:pre-wrap; font-weight:600; box-shadow:var(--shadow-sm);"><b style="color:var(--primary); font-size:13px; display:block; margin-bottom:4px;">🛁 ケア:</b>${log.care || '-'}</div></div>`;
+    }
+    editBtn.setAttribute('data-date', dateStr); 
+    const dModal = document.getElementById('daily-summary-modal'); 
+    if(dModal) dModal.style.display = 'flex';
+}
+
+export function closeDailySummary() {
+    const dModal = document.getElementById('daily-summary-modal'); 
+    if(dModal) dModal.style.display = 'none';
+}
+
+export function editDailyData(onLoadFormData) {
+    const btn = document.getElementById('edit-daily-btn'); 
+    if(!btn) return;
+    const dateStr = btn.getAttribute('data-date'); 
+    const dInput = document.getElementById('date'); 
+    if(dInput) dInput.value = dateStr; 
+    
+    const parts = dateStr.split('-'); 
+    const displayStr = `${parts[1]}/${parts[2]}`; 
+    const preDisp = document.getElementById('display-date-pre'); 
+    if(preDisp) preDisp.textContent = `[ ${displayStr} ]`; 
+    const postDisp = document.getElementById('display-date-post'); 
+    if(postDisp) postDisp.textContent = `[ ${displayStr} ]`; 
+    
+    closeDailySummary(); 
+    if(onLoadFormData) onLoadFormData(dateStr);
+    
+    const preTab = document.querySelector('.tab-btn[onclick="switchTab(\'pre\', this)"]');
+    if (preTab && window.switchTab) window.switchTab('pre', preTab); 
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // --- 🏆 履歴・チャート ---
 export function renderPlayerHistory() {
     const playerName = STATE.currentUser; 
@@ -238,7 +311,6 @@ export function renderPlayerHistory() {
         if(mtRank) mtRank.textContent = '- 位'; 
     }
 
-    // Chart.js 描画
     if (typeof Chart !== 'undefined') {
         const ctx = document.getElementById('player-chart');
         if (ctx) {
@@ -286,6 +358,57 @@ export function renderPlayerHistory() {
             }
         }
     }
+}
+
+// --- 📖 学び (Education) ---
+export function filterEducation(cat, btn) { 
+    document.querySelectorAll('.edu-cat-btn').forEach(b => b.classList.remove('active')); 
+    if(btn) btn.classList.add('active'); 
+    STATE.currentEduCat = cat; 
+    renderEducationList(); 
+}
+
+function getYouTubeEmbedUrl(url) { 
+    if(!url) return null; 
+    const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/); 
+    return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null; 
+}
+
+export function renderEducationList() {
+    const container = document.getElementById('education-list-container'); 
+    if(!container) return; 
+    container.innerHTML = '';
+    
+    const filtered = STATE.currentEduCat === 'すべて' 
+        ? STATE.education 
+        : STATE.education.filter(item => 
+            item.category === STATE.currentEduCat || 
+            (STATE.currentEduCat === 'ケア' && item.category === 'ケア・リカバリー') || 
+            (STATE.currentEduCat === '理論' && item.category === 'トレーニング理論') || 
+            (STATE.currentEduCat === '栄養' && item.category === '栄養・食事') || 
+            (STATE.currentEduCat === 'メンタル' && item.category === 'メンタル')
+        );
+        
+    if (filtered.length === 0) { 
+        container.innerHTML = '<div class="text-center" style="padding: 40px; color: var(--text-muted); font-size: 15px; font-weight:bold;">このカテゴリのコンテンツはまだありません。</div>'; 
+        return; 
+    }
+    
+    filtered.forEach(item => { 
+        const card = document.createElement('div'); 
+        card.className = 'edu-card'; 
+        const embedUrl = getYouTubeEmbedUrl(item.url); 
+        const ytHtml = embedUrl 
+            ? `<div class="yt-container" style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; margin-top:14px; border-radius:12px; box-shadow:var(--shadow-sm);"><iframe style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;" src="${embedUrl}" allowfullscreen></iframe></div>` 
+            : (item.url ? `<a href="${item.url}" target="_blank" style="display:inline-block; margin-top:14px; color:var(--primary); font-weight:800; font-size:14px; background:var(--primary-light); padding:8px 16px; border-radius:12px; transition:transform 0.2s;">🔗 リンクを開く</a>` : ''); 
+        
+        const isDark = document.body.classList.contains('dark-mode'); 
+        const bg = isDark ? '#3a1523' : '#ffedd5'; 
+        const col = isDark ? '#fbcfe8' : '#c2410c'; 
+        
+        card.innerHTML = `<span style="background:${bg}; color:${col}; font-size:12px; padding:4px 12px; border-radius:14px; font-weight:900; display:inline-block; margin-bottom:12px; letter-spacing:0.5px;">${item.category}</span><h3 style="font-size: 18px; font-weight: 900; color: var(--primary); margin: 0 0 12px 0;">${item.title}</h3><div style="font-size: 14px; color: var(--text-main); white-space: pre-wrap; line-height: 1.6; font-weight:500;">${item.description}</div>${ytHtml}`; 
+        container.appendChild(card); 
+    });
 }
 
 // --- 🔔 通知バッジ・バナー ---
@@ -336,7 +459,6 @@ export function renderTeamActivities(onKudosClick) {
             </div>
         `;
         
-        // Kudosボタンのイベントリスナー設定
         div.querySelectorAll('.kudos-btn').forEach(btn => {
             btn.onclick = () => onKudosClick(log.playerName, btn.getAttribute('data-stamp'), log.date);
         });
