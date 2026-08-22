@@ -1,7 +1,22 @@
+// ==========================================
+// 📌 管理者用 メインコントローラー (Main)
+// 初期化、イベント連携、データのCRUDを制御します
+// ==========================================
+
 import { STATE } from './state.js';
 import * as logic from './logic.js';
 import * as ui from './ui.js';
 import * as charts from './charts.js';
+
+// --- 共通モジュールのインポート ---
+import { CONSTANTS } from '../common/constants.js';
+import { HAPTIC, UI } from '../common/utils.js';
+import { initFirebase, db, colRefs } from '../common/firebase-init.js';
+
+// グローバルスコープへ紐付け (他モジュールやインラインイベントから参照するため)
+window.CONSTANTS = CONSTANTS;
+window.HAPTIC = HAPTIC;
+window.UI = UI;
 
 async function initApp() {
     setDefaultDates();
@@ -10,34 +25,26 @@ async function initApp() {
         document.getElementById('theme-toggle').innerHTML = '☀️';
     }
 
-    try {
-        if(window.CONSTANTS && window.CONSTANTS.FIREBASE_CONFIG) {
-            if (!firebase.apps.length) firebase.initializeApp(window.CONSTANTS.FIREBASE_CONFIG);
-            const db = firebase.firestore();
-            db.settings({ experimentalForceLongPolling: true });
-            await firebase.auth().signInAnonymously();
-            
-            window.colRefs = {
-                logs: db.collection('team_condition_logs'),
-                players: db.collection('team_players'),
-                goals: db.collection('team_goals'),
-                settings: db.collection('team_settings'),
-                edu: db.collection('team_education'),
-                broadcasts: db.collection('team_broadcasts')
-            };
+    // Firebaseの初期化をここで明示的に待機
+    const isFirebaseInitialized = await initFirebase(CONSTANTS);
+    if (isFirebaseInitialized) {
+        window.db = db;
+        window.colRefs = colRefs;
+    }
 
+    try {
+        if(window.colRefs && Object.keys(window.colRefs).length > 0) {
             document.getElementById('connection-status').textContent = 'クラウド同期中';
             document.getElementById('connection-status').className = 'status-badge status-cloud';
-
             setupListeners();
         } else {
-            throw new Error("CONSTANTS is not defined properly");
+            throw new Error("Firebase is not initialized");
         }
     } catch (error) {
         console.warn("Firebase Error", error);
         document.getElementById('connection-status').textContent = 'ローカル';
         document.getElementById('connection-status').className = 'status-badge status-local';
-        if(window.UI && window.UI.showToast) window.UI.showToast("通信エラーのため、ローカルデータで起動します", "warning");
+        if(window.UI) window.UI.showToast("通信エラーのため、ローカルデータで起動します", "warning");
         loadLocalData();
     }
 }
@@ -563,6 +570,9 @@ function toggleTheme() {
     if(STATE.charts.rsi) STATE.charts.rsi.update();
 }
 
+// ==========================================
+// グローバル空間へのエクスポート
+// ==========================================
 window.toggleTheme = toggleTheme;
 window.switchTab = ui.switchTab;
 window.openHistoryView = (viewId) => ui.openHistoryView(viewId, (id) => {
@@ -604,5 +614,5 @@ window.clearAllData = clearAllData;
 window.downloadCSV = downloadCSV;
 window.generateMonthlyReport = generateMonthlyReport;
 
-// 初期化実行
+// 起動
 document.addEventListener('DOMContentLoaded', initApp);
