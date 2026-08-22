@@ -142,6 +142,26 @@ function setupFirebaseListeners() {
             } 
         }); 
     }
+    // 💡 修正: goals, edu のリスナーを復活
+    if(window.colRefs.goals) {
+        window.colRefs.goals.onSnapshot(snapshot => {
+            STATE.goals = {}; 
+            snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
+            if(STATE.currentUser) ui.renderPlayerGoal();
+        });
+    }
+    if(window.colRefs.edu) {
+        window.colRefs.edu.onSnapshot(snapshot => {
+            STATE.education = [];
+            snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
+            STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            // 必要な場合は再レンダリング処理を呼ぶ
+            const eduTab = document.getElementById('tab-education');
+            if(eduTab && eduTab.classList.contains('active') && window.renderEducationList) {
+                window.renderEducationList();
+            }
+        });
+    }
     if(window.colRefs.logs) { 
         window.colRefs.logs.onSnapshot(snapshot => { 
             STATE.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)); 
@@ -183,6 +203,7 @@ function loadLocalData() {
     STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]').sort((a, b) => new Date(b.date) - new Date(a.date));
     STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}'); 
     STATE.kudos = JSON.parse(localStorage.getItem('team_kudos') || '[]'); 
+    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}'); // ローカル用も追加
     
     ui.renderCareTags(); 
     ui.updateCountdownUI(); 
@@ -228,6 +249,7 @@ function setupEventListeners() {
     const badInp = document.getElementById('bad'); 
     if(badInp) badInp.addEventListener('input', refreshAdvicePostOnly);
     
+    // 朝の張りボタン
     document.querySelectorAll('.tag-btn-pre').forEach(btn => {
         btn.addEventListener('click', function() { 
             if(window.HAPTIC) window.HAPTIC.light(); 
@@ -240,6 +262,22 @@ function setupEventListeners() {
                 this.classList.add('selected'); 
             } 
             refreshAdvicePre(); 
+        });
+    });
+
+    // 💡 修正: 夜の張りボタンのイベントリスナーを追加
+    document.querySelectorAll('.tag-btn-post').forEach(btn => {
+        btn.addEventListener('click', function() { 
+            if(window.HAPTIC) window.HAPTIC.light(); 
+            const part = this.getAttribute('data-part'); 
+            if (STATE.sorenessPost.includes(part)) { 
+                STATE.sorenessPost = STATE.sorenessPost.filter(p => p !== part); 
+                this.classList.remove('selected'); 
+            } else { 
+                STATE.sorenessPost.push(part); 
+                this.classList.add('selected'); 
+            } 
+            refreshAdvicePostOnly(); 
         });
     });
 }
