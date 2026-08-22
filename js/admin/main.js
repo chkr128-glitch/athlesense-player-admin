@@ -270,11 +270,24 @@ function updateCountdownUI() {
     const target = new Date(STATE.settings.targetEventDate + 'T00:00:00'); target.setHours(0,0,0,0);
     const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
+    // 管理者画面でのデザイン崩れを防止するためのスタイル補正
+    banner.style.display = 'flex';
+    banner.style.alignItems = 'center';
+    banner.style.justifyContent = 'center';
+    banner.style.gap = '12px';
+    banner.style.padding = '16px';
+    banner.style.borderRadius = '12px';
+    banner.style.color = 'white';
+    banner.style.fontWeight = '900';
+    banner.style.fontSize = '18px';
+    banner.style.marginBottom = '20px';
+    banner.style.boxShadow = '0 4px 12px rgba(249, 115, 22, 0.3)';
+
     if (diffDays > 0) {
-        banner.style.display = 'flex'; banner.style.background = '';
-        banner.innerHTML = `🏆 ${STATE.settings.targetEventName || '大会'}まで あと <span class="days">${diffDays}</span> 日！`;
+        banner.style.background = 'linear-gradient(135deg, var(--secondary, #f97316), var(--secondary-dark, #ea580c))';
+        banner.innerHTML = `🏆 ${STATE.settings.targetEventName || '大会'}まで あと <span class="days" style="font-size:32px; font-weight:900; background:white; color:var(--secondary-dark, #ea580c); padding:4px 12px; border-radius:8px; margin: 0 4px; box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);">${diffDays}</span> 日！`;
     } else if (diffDays === 0) {
-        banner.style.display = 'flex'; banner.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        banner.style.background = 'linear-gradient(135deg, #10b981, #059669)';
         banner.innerHTML = `🔥 本日は ${STATE.settings.targetEventName || '大会'} 当日です！健闘を祈ります！`;
     } else {
         banner.style.display = 'none'; 
