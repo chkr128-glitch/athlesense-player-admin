@@ -2,15 +2,15 @@
 // 📌 Firebase 初期化共通ロジック
 // ==========================================
 
-// アプリ全体で共有するDB参照オブジェクト
-let db = null; 
-let colRefs = {};
+export let db = null; 
+export let colRefs = {};
 
 /**
  * Firebaseを初期化し、Firestoreのコレクション参照をセットアップする
+ * @param {Object} CONSTANTS - 共通定数オブジェクト (FIREBASE_CONFIGを含む)
  * @returns {Promise<boolean>} 成功した場合はtrue、失敗した場合はfalse
  */
-async function initFirebase() {
+export async function initFirebase(CONSTANTS) {
     try {
         if (!firebase.apps.length) {
             firebase.initializeApp(CONSTANTS.FIREBASE_CONFIG);
@@ -28,7 +28,7 @@ async function initFirebase() {
             settings: db.collection('team_settings'),
             edu: db.collection('team_education'),
             broadcasts: db.collection('team_broadcasts'),
-            kudos: db.collection('team_kudos') // 主にindex用だがadminで保持しても問題なし
+            kudos: db.collection('team_kudos')
         };
 
         return true;
