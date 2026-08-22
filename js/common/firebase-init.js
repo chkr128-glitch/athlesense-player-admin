@@ -14,7 +14,9 @@ export async function initFirebase(CONSTANTS) {
         
         db = firebase.firestore();
         db.settings({ experimentalForceLongPolling: true });
-        await firebase.auth().signInAnonymously();
+        
+        // 🚨 修正: 以前の signInAnonymously() (匿名ログイン) を削除しました
+        // 今後は auth.js を通じて明示的にログインを行います。
         
         // 共通で利用するコレクション群
         colRefs = {
@@ -24,7 +26,8 @@ export async function initFirebase(CONSTANTS) {
             settings: db.collection('team_settings'),
             edu: db.collection('team_education'),
             broadcasts: db.collection('team_broadcasts'),
-            kudos: db.collection('team_kudos')
+            kudos: db.collection('team_kudos'),
+            adminUsers: db.collection('admin_users') // 👔 追加: 管理者名簿
         };
 
         return true;
