@@ -12,7 +12,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AthleSense">
     <link rel="apple-touch-icon" href="icon-index.png">
-    <!-- faviconの404エラー対策 -->
     <link rel="icon" href="icon-index.png" type="image/png">
 
     <!-- Firebase / Chart.js / Confetti -->
@@ -66,7 +65,7 @@
         </div>
         <div class="header-center">AthleSense</div>
         <div class="header-right">
-            <div id="header-streak-badge" class="header-streak-badge">
+            <div id="header-streak-badge" class="header-streak-badge hidden">
                 <span id="header-streak-icon" style="margin-right: 4px;"></span>
                 <span id="header-streak-count"></span>
             </div>
@@ -77,15 +76,54 @@
         </div>
     </header>
 
-    <!-- ログイン画面 -->
-    <div id="login-screen" class="container flex-center" style="flex-direction: column; min-height: 80vh;">
+    <!-- 1. ローディング画面 (初期状態確認用) -->
+    <div id="loading-screen" class="container flex-center" style="min-height: 80vh; flex-direction: column;">
+        <div style="font-size: 40px; margin-bottom: 16px; animation: popIn 1s infinite alternate;">🏃‍♂️</div>
+        <div style="font-size: 18px; font-weight: 900; color: var(--primary);">認証情報を確認中...</div>
+    </div>
+
+    <!-- 2. 認証画面 (ログイン / 新規登録) -->
+    <div id="auth-screen" class="container flex-center hidden" style="flex-direction: column; min-height: 80vh;">
         <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--primary);">
-            <h2 class="section-title flex-center" style="border: none; font-size: 26px;">👤 ログイン</h2>
-            <p style="font-size: 15px; color: var(--text-main); margin-bottom: 30px; font-weight: 600;">自分の名前を選択して、この端末を「自分専用」に設定してください。</p>
-            <select id="login-player-select" class="mb-5 text-center" style="border-color: var(--primary); font-size: 18px; padding: 20px;">
+            <h2 class="section-title flex-center mt-0" style="border: none; font-size: 24px;">🔐 ログイン / 新規登録</h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px; font-weight: 600;">あなたのアカウントで安全にサインインします。</p>
+            
+            <div class="form-group text-left">
+                <label style="font-weight: 900; color: var(--text-main);">メールアドレス</label>
+                <input type="email" id="auth-email" placeholder="example@email.com">
+            </div>
+            <div class="form-group text-left mb-4">
+                <label style="font-weight: 900; color: var(--text-main);">パスワード</label>
+                <input type="password" id="auth-password" placeholder="6文字以上">
+            </div>
+            
+            <div class="flex-row-gap mb-4">
+                <button class="btn-primary" style="flex:1; margin:0;" onclick="handleEmailLogin()">ログイン</button>
+                <button class="tag-btn" style="flex:1; box-shadow:none; margin:0; padding:16px;" onclick="handleEmailRegister()">新規登録</button>
+            </div>
+            
+            <div style="border-top: 1px dashed var(--border-color); margin: 20px 0;"></div>
+            
+            <button class="btn-primary" style="background: white; color: #4b5563; border: 1px solid #d1d5db; margin-bottom:0;" onclick="handleGoogleLogin()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:18px; vertical-align:middle; margin-right:8px;"> Googleでログイン
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. 名前紐付け画面 (初回のみ) -->
+    <div id="setup-screen" class="container flex-center hidden" style="flex-direction: column; min-height: 80vh;">
+        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--secondary);">
+            <h2 class="section-title flex-center mt-0" style="border: none; font-size: 24px; color: var(--secondary);">👤 選手名の紐付け</h2>
+            <p style="font-size: 14px; color: var(--text-main); margin-bottom: 16px; font-weight: 600;">
+                認証が完了しました。<br>あなたの名前を選択し、アカウントと紐付けてください。
+            </p>
+            <div style="background: var(--color-danger-light); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+                <span style="color:var(--color-danger); font-size:12px; font-weight:900;">⚠️ 注意: この操作は一度だけ行います。後から自分で変更することはできません。間違えないように選択してください。</span>
+            </div>
+            <select id="setup-player-select" class="mb-5 text-center w-full" style="border-color: var(--secondary); font-size: 16px; padding: 16px; font-weight:900;">
                 <option value="" disabled selected>名前を読み込み中...</option>
             </select>
-            <button class="btn-primary" onclick="handleLogin()">ログインして開始 🚀</button>
+            <button class="btn-primary" style="background: var(--secondary); border-color: var(--secondary); margin-bottom:0;" onclick="handleLinkPlayer()">この名前で登録して開始 🚀</button>
         </div>
     </div>
 
