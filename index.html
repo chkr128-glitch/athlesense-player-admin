@@ -7,12 +7,13 @@
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ec4899">
-    <!-- 非推奨警告の修正 -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AthleSense">
     <link rel="apple-touch-icon" href="icon-index.png">
+    <!-- faviconの404エラー対策 -->
+    <link rel="icon" href="icon-index.png" type="image/png">
 
     <!-- Firebase / Chart.js / Confetti -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -257,7 +258,7 @@
                      
                      <div class="form-group danger-box">
                          <div class="form-label-flex"><label style="color: var(--warning-text); font-size:16px;">🔥 ケガ・痛みの詳細 (朝)</label></div>
-                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
+                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違軽く違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
                      </div>
                 </div>
 
