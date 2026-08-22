@@ -6,15 +6,16 @@
     <title>AthleSense Admin</title>
 
     <meta name="theme-color" content="#1e3a8a">
+    <!-- 非推奨警告の修正 -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="icon-admin.png">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- 分割したCSSの読み込み -->
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/admin.css">
-
-    <link rel="apple-touch-icon" href="icon-admin.png">
 </head>
 <body>
 
@@ -356,7 +357,7 @@
                 <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
                 <div style="background-color: var(--secondary-light); border: 2px solid var(--secondary); border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow:var(--shadow-md);">
                     <h4 style="margin: 0 0 12px 0; color: var(--secondary); display: flex; align-items: center; gap: 8px; font-size:18px; font-weight:900;">🏆 チーム目標大会の設定</h4>
-                    <p style="font-size: 14px; color: var(--text-main); margin-top: 0; font-weight:700; margin-bottom:16px;">ここで設定した大会までのカウントダウンが、全選手のスマホ画面のトップに表示されます。</p>
+                    <p style="font-size: 14px; color: var(--text-main); margin-top: 0; font-weight:700; margin-bottom:16px;">ここで設定した大会までのカウントダウンが全選手のスマホ画面のトップに表示されます。</p>
                     <div class="flex-row-gap" style="flex-wrap: wrap;">
                         <input type="text" id="target-event-name" placeholder="大会名 (例: 県大会)" style="flex: 1; min-width: 180px; margin-bottom: 0;">
                         <input type="date" id="target-event-date" style="flex: 1; min-width: 180px; margin-bottom: 0;">
@@ -531,23 +532,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
-    <!-- 共通JSの読み込み -->
-    <script src="js/common/constants.js"></script>
-    <script src="js/common/utils.js"></script>
-    <script src="js/common/firebase-init.js"></script>
-    <script>
-        // モジュールからアクセスできるように window オブジェクトに紐付け
-        window.CONSTANTS = CONSTANTS;
-        window.HAPTIC = HAPTIC;
-        window.UI = UI;
-
-        // Firebase初期化を実行し、完了後に window.colRefs を設定
-        initFirebase().then(() => {
-            window.db = db;
-            window.colRefs = colRefs;
-        });
-    </script>
 
     <!-- アプリケーション本体 (ES Modules) -->
     <script type="module" src="js/admin/main.js"></script>
