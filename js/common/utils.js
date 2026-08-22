@@ -1,6 +1,3 @@
-// ==========================================
-// 📌 共通ユーティリティ (Haptic & UI)
-// ==========================================
 export const HAPTIC = {
     light: () => { if (navigator.vibrate) navigator.vibrate(10); },
     medium: () => { if (navigator.vibrate) navigator.vibrate(30); },
