@@ -1,9 +1,27 @@
+// ==========================================
+// 📌 選手用 メインコントローラー (Main)
+// 初期化、イベント連携、全体のデータフローを制御します
+// ==========================================
+
 import { STATE } from './state.js';
 import * as logic from './logic.js';
 import * as ui from './ui.js';
 import * as auth from '../common/auth.js';
 import * as form from './form.js';
 
+// --- 共通モジュールのインポート ---
+import { CONSTANTS } from '../common/constants.js';
+import { HAPTIC, UI } from '../common/utils.js';
+import { initFirebase, db, colRefs } from '../common/firebase-init.js';
+
+// グローバルスコープへ紐付け (他モジュールやインラインイベントから参照するため)
+window.CONSTANTS = CONSTANTS;
+window.HAPTIC = HAPTIC;
+window.UI = UI;
+
+// ==========================================
+// 初期化プロセス
+// ==========================================
 async function initApp() {
     // テーマの復元
     if (localStorage.getItem('theme') === 'dark') { 
@@ -23,12 +41,18 @@ async function initApp() {
     STATE.calMonth = today.getMonth();
     
     setupEventListeners();
-    fetchWeather(); 
-    checkReminders(); 
+    fetchWeather();
+    checkReminders();
+
+    // Firebaseの初期化をここで明示的に待機
+    const isFirebaseInitialized = await initFirebase(CONSTANTS);
+    if (isFirebaseInitialized) {
+        window.db = db;
+        window.colRefs = colRefs;
+    }
 
     try {
-        // firebase-init.js 等で window.colRefs がセットされていることを想定
-        if(window.colRefs) {
+        if(window.colRefs && Object.keys(window.colRefs).length > 0) {
             setupFirebaseListeners(); 
             checkLoginStatus(); 
         } else {
@@ -36,23 +60,24 @@ async function initApp() {
         }
     } catch (error) {
         console.warn("ローカルモードで起動します", error); 
-        if(window.UI) window.UI.showToast("ローカルモードで起動します。", "warning");
+        window.UI.showToast("ローカルモードで起動します。", "warning");
         loadLocalData(); 
         checkLoginStatus(); 
     }
 }
 
+// ==========================================
+// 認証・セッション管理
+// ==========================================
 function checkLoginStatus() {
     const savedUser = auth.getCurrentUser();
     if (savedUser) {
         STATE.currentUser = savedUser;
-        if(window.UI) {
-            window.UI.hideDisplay('login-screen'); 
-            window.UI.toggleDisplay('main-app', 'block');
-            window.UI.toggleDisplay('logout-btn', 'flex'); 
-            window.UI.toggleDisplay('notification-btn', 'flex'); 
-            window.UI.toggleDisplay('header-streak-badge', 'flex');
-        }
+        window.UI.hideDisplay('login-screen'); 
+        window.UI.toggleDisplay('main-app', 'block');
+        window.UI.toggleDisplay('logout-btn', 'flex'); 
+        window.UI.toggleDisplay('notification-btn', 'flex'); 
+        window.UI.toggleDisplay('header-streak-badge', 'flex');
         
         document.querySelectorAll('.display-player-name').forEach(el => el.textContent = STATE.currentUser);
         const me = STATE.players.find(p => p.name === STATE.currentUser); 
@@ -74,14 +99,12 @@ function checkLoginStatus() {
         }
         updateGlobalNotifications();
     } else {
-        if(window.UI) {
-            window.UI.toggleDisplay('login-screen', 'flex'); 
-            window.UI.hideDisplay('main-app');
-            window.UI.hideDisplay('logout-btn'); 
-            window.UI.hideDisplay('notification-btn'); 
-            window.UI.hideDisplay('header-streak-badge'); 
-            window.UI.hideDisplay('streak-badge-container');
-        }
+        window.UI.toggleDisplay('login-screen', 'flex'); 
+        window.UI.hideDisplay('main-app');
+        window.UI.hideDisplay('logout-btn'); 
+        window.UI.hideDisplay('notification-btn'); 
+        window.UI.hideDisplay('header-streak-badge'); 
+        window.UI.hideDisplay('streak-badge-container');
     }
 }
 
@@ -99,6 +122,9 @@ function handleLogout() {
     }); 
 }
 
+// ==========================================
+// データフロー・Firebase購読
+// ==========================================
 function setupFirebaseListeners() {
     if(window.colRefs.players) { 
         window.colRefs.players.onSnapshot(snapshot => { 
@@ -172,6 +198,9 @@ function loadLocalData() {
     }
 }
 
+// ==========================================
+// フォーム入力・UIイベント
+// ==========================================
 function setupEventListeners() {
     const elFatigue = document.getElementById('fatigue'); 
     const elStress = document.getElementById('stress'); 
@@ -457,7 +486,6 @@ async function handleSendKudos(target, stamp, logDate) {
 }
 
 function updateGlobalNotifications() {
-    // 未読の計算とバッジの更新
     const unreadBroadcasts = STATE.broadcasts.filter(b => (b.target === 'ALL' || b.target === STATE.currentUserCategory) && !(b.readBy && b.readBy.includes(STATE.currentUser)));
     const unreadComments = STATE.logs.filter(log => log.playerName === STATE.currentUser && log.coachComment && !log.playerReadComment);
     const unreadKudos = STATE.kudos.filter(k => k.target === STATE.currentUser && !k.isRead);
@@ -573,6 +601,9 @@ function switchTab(tabId, btn) {
     }
 }
 
+// ==========================================
+// グローバル空間へのエクスポート (インラインイベント用)
+// ==========================================
 window.handleLogin = handleLogin;
 window.handleLogout = handleLogout;
 window.saveData = form.saveData;
@@ -584,5 +615,5 @@ window.handleDateSelect = handleDateSelect;
 window.calcFv = calcFv;
 window.handleSyncDeviceData = (name) => { if(window.UI) window.UI.showToast(`${name}の自動取得は開発準備中です。`, "warning"); };
 
-// 初期化処理の実行
+// 起動
 document.addEventListener('DOMContentLoaded', initApp);
