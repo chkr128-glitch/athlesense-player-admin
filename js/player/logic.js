@@ -74,8 +74,9 @@ export function evaluateSprintRank(distance, time, logs, currentUser) {
 export function calcFvProfile(time30m, timeFly20m) {
     if (time30m > 0 && timeFly20m > 0) {
         const ratio = time30m / timeFly20m;
-        const forceThreshold = window.CONSTANTS.FV_THRESHOLDS.FORCE_DEFICIT;
-        const veloThreshold = window.CONSTANTS.FV_THRESHOLDS.VELOCITY_DEFICIT;
+        // 💡 修正: 正しいパスから定数を取得
+        const forceThreshold = window.CONSTANTS && window.CONSTANTS.THRESHOLDS ? window.CONSTANTS.THRESHOLDS.FV_FORCE_DEFICIT : 2.15;
+        const veloThreshold = window.CONSTANTS && window.CONSTANTS.THRESHOLDS ? window.CONSTANTS.THRESHOLDS.FV_VELOCITY_DEFICIT : 1.95;
         
         let result = ratio >= forceThreshold ? '力不足' : ratio <= veloThreshold ? '速度不足' : 'バランス型';
         return { ratio, result };
@@ -118,7 +119,6 @@ export function checkPersonalBestAll(newSprints, playerName, otherLogs) {
  */
 export function calcIrsScore(type, data, sorenessList) {
     let score = 5; 
-    // 💡修正ポイント: THRESHOLDS の中から参照するようにパスを修正
     const W = window.CONSTANTS && window.CONSTANTS.THRESHOLDS ? window.CONSTANTS.THRESHOLDS.IRS_WEIGHTS : null;
     if (!W) return 0;
     
