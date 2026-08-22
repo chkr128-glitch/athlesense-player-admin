@@ -14,6 +14,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <!-- 分割したCSSの読み込み -->
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/admin.css">
@@ -53,30 +58,40 @@
         <div style="font-size: 20px; font-weight: 900; color: var(--primary);">管理者権限を確認中...</div>
     </div>
 
-    <!-- 2. 認証画面 (ログイン / 新規登録) -->
-    <div id="auth-screen" class="container flex-center hidden" style="flex-direction: column; min-height: 80vh;">
-        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--primary);">
-            <h2 class="section-title flex-center mt-0" style="border: none; font-size: 24px;">🔐 管理者ログイン</h2>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px; font-weight: 600;">管理者アカウントでサインインしてください。</p>
+    <!-- 2. 認証画面 (洗練されたモダンUI) -->
+    <div id="auth-screen" class="container flex-center hidden" style="flex-direction: column; min-height: 100vh; background: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, #e0e7ff, transparent 60%); margin: -20px; padding: 20px;">
+        
+        <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px;">
+            <div style="font-size: 56px; margin-bottom: 10px; text-shadow: 0 4px 12px rgba(30,58,138,0.3);">🛡️</div>
+            <h1 style="font-size: 32px; font-weight: 900; color: var(--primary); margin: 0; letter-spacing: -1px;">AthleSense Admin</h1>
+            <p style="font-size: 14px; color: var(--text-main); font-weight: 700; margin-top: 8px;">チームのコンディションを、安全に管理。</p>
+        </div>
+
+        <div class="glass-card w-full animate-fade-in-up" style="max-width: 380px; padding: 32px 24px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-radius: 24px; animation-delay: 0.1s;">
             
-            <div class="form-group text-left">
-                <label style="font-weight: 900; color: var(--text-main);">メールアドレス</label>
-                <input type="email" id="auth-email" placeholder="admin@example.com" style="margin-bottom:0;">
-            </div>
-            <div class="form-group text-left mb-4">
-                <label style="font-weight: 900; color: var(--text-main);">パスワード</label>
-                <input type="password" id="auth-password" placeholder="6文字以上" style="margin-bottom:0;">
-            </div>
-            
-            <div class="flex-row-gap mb-4">
-                <button class="btn btn-success" style="flex:1; margin:0;" onclick="handleEmailLogin()">ログイン</button>
-                <button class="btn btn-outline" style="flex:1; margin:0;" onclick="handleEmailRegister()">新規登録</button>
+            <div class="form-group mb-4 text-left">
+                <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">管理者メールアドレス</label>
+                <input type="email" id="auth-email" placeholder="admin@example.com" class="w-full" style="padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0;">
             </div>
             
-            <div style="border-top: 1px dashed var(--border-color); margin: 20px 0;"></div>
+            <div class="form-group mb-6 text-left">
+                <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">パスワード</label>
+                <input type="password" id="auth-password" placeholder="6文字以上の英数字" class="w-full" style="padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0;">
+            </div>
             
-            <button class="btn btn-outline w-full" style="background: white; color: #4b5563; margin-bottom:0;" onclick="handleGoogleLogin()">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:18px; vertical-align:middle; margin-right:8px;"> Googleでログイン
+            <div class="flex-row-gap mb-5">
+                <button class="btn btn-success" style="flex: 2; margin:0; padding: 16px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);" onclick="handleEmailLogin()">ログイン</button>
+                <button class="btn btn-outline" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; background: var(--card-bg); font-weight: 800;" onclick="handleEmailRegister()">新規登録</button>
+            </div>
+            
+            <div style="display: flex; align-items: center; margin: 24px 0;">
+                <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
+                <div style="padding: 0 16px; font-size: 12px; color: var(--text-muted); font-weight: 700;">または</div>
+                <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
+            </div>
+            
+            <button class="w-full" style="background: white; color: #374151; border: 1px solid #e5e7eb; padding: 14px; border-radius: 14px; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 0;" onclick="handleGoogleLogin()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:20px; margin-right:12px;"> Google で続ける
             </button>
         </div>
     </div>
@@ -580,11 +595,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <!-- アプリケーション本体 -->
     <script type="module" src="js/admin/main.js"></script>
