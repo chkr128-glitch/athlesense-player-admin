@@ -82,7 +82,7 @@
     </div>
 
     <!-- 2. 認証画面 (洗練されたモダンUI) -->
-    <div id="auth-screen" class="container flex-center hidden" style="flex-direction: column; min-height: 100vh; background: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, var(--secondary-light), transparent 60%); margin: -20px; padding: 20px;">
+    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, var(--secondary-light), transparent 60%); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
         
         <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 56px; margin-bottom: 10px; text-shadow: 0 4px 12px rgba(236,72,153,0.3);">🏃‍♂️</div>
@@ -90,21 +90,21 @@
             <p style="font-size: 14px; color: var(--text-main); font-weight: 700; margin-top: 8px;">コンディション管理を、もっとスマートに。</p>
         </div>
 
-        <div class="glass-card w-full animate-fade-in-up" style="max-width: 380px; padding: 32px 24px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-radius: 24px; animation-delay: 0.1s;">
+        <div class="glass-card animate-fade-in-up" style="width: 100%; max-width: 380px; padding: 32px 24px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-radius: 24px; animation-delay: 0.1s; box-sizing: border-box;">
             
             <div class="form-group mb-4 text-left">
                 <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">メールアドレス</label>
-                <input type="email" id="auth-email" placeholder="hello@example.com" class="w-full" style="padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0;">
+                <input type="email" id="auth-email" placeholder="hello@example.com" style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0; box-sizing: border-box;">
             </div>
             
             <div class="form-group mb-6 text-left">
                 <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">パスワード</label>
-                <input type="password" id="auth-password" placeholder="6文字以上の英数字" class="w-full" style="padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0;">
+                <input type="password" id="auth-password" placeholder="6文字以上の英数字" style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0; box-sizing: border-box;">
             </div>
             
-            <div class="flex-row-gap mb-5">
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
                 <button class="btn-primary" style="flex: 2; margin:0; padding: 16px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);" onclick="handleEmailLogin()">ログイン</button>
-                <button class="tag-btn" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 800;" onclick="handleEmailRegister()">新規登録</button>
+                <button class="tag-btn" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 800; box-shadow: none;" onclick="handleEmailRegister()">新規登録</button>
             </div>
             
             <div style="display: flex; align-items: center; margin: 24px 0;">
@@ -113,7 +113,7 @@
                 <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
             </div>
             
-            <button class="w-full" style="background: white; color: #374151; border: 1px solid #e5e7eb; padding: 14px; border-radius: 14px; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 0;" onclick="handleGoogleLogin()">
+            <button style="width: 100%; background: white; color: #374151; border: 1px solid #e5e7eb; padding: 14px; border-radius: 14px; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 0; box-sizing: border-box;" onclick="handleGoogleLogin()">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:20px; margin-right:12px;"> Google で続ける
             </button>
         </div>
@@ -305,7 +305,7 @@
                      
                      <div class="form-group danger-box">
                          <div class="form-label-flex"><label style="color: var(--warning-text); font-size:16px;">🔥 ケガ・痛みの詳細 (朝)</label></div>
-                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
+                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違野感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
                      </div>
                 </div>
 
