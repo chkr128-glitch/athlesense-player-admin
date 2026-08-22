@@ -13,10 +13,10 @@ window.CONSTANTS = CONSTANTS;
 window.HAPTIC = HAPTIC;
 window.UI = UI;
 
-let playersLoaded = false; // 選手データ読み込み完了フラグ
-let mainAppInitialized = false; // メインアプリの初期化重複防止フラグ
+let playersLoaded = false;
+let mainAppInitialized = false;
+let isListenersSetup = false; // 💡 修正: リスナーの重複登録を防ぐフラグ
 
-/* STREAMING_CHUNK:Initializing Application... */
 // ==========================================
 // 初期化プロセス
 // ==========================================
@@ -40,32 +40,35 @@ async function initApp() {
     fetchWeather();
     checkReminders();
 
-    // Firebaseの初期化
     const isFirebaseInitialized = await initFirebase(CONSTANTS);
     if (isFirebaseInitialized) {
         window.db = db;
         window.colRefs = colRefs;
         
-        setupFirebaseListeners();
-        
-        // 認証状態の監視開始
+        // 💡 修正: 起動直後のリスナー登録を削除し、認証監視の中に移動しました
         auth.onAuthChange(user => {
-            if(playersLoaded) checkUserLink(user);
+            if (user) {
+                // ログイン済みの場合、リスナーがまだ設定されていなければ設定する
+                if (!isListenersSetup) {
+                    setupFirebaseListeners();
+                    isListenersSetup = true;
+                } else {
+                    if(playersLoaded) checkUserLink(user);
+                }
+            } else {
+                // 未ログインの場合は即座にログイン画面へ
+                checkUserLink(null);
+            }
         });
     } else {
         window.UI.showToast("通信エラー: Firebaseが初期化できませんでした", "error");
-        showScreen('auth-screen'); // エラー時はとりあえず認証画面を表示
+        showScreen('auth-screen');
     }
 }
 
-/* STREAMING_CHUNK:Authentication & Routing... */
 // ==========================================
 // 認証・ルーティング・紐付け
 // ==========================================
-
-/**
- * 画面の切り替えを管理するヘルパー関数
- */
 function showScreen(screenId) {
     const screens = ['loading-screen', 'auth-screen', 'setup-screen', 'main-app'];
     screens.forEach(id => {
@@ -92,9 +95,6 @@ function showScreen(screenId) {
     }
 }
 
-/**
- * FirebaseユーザーのUIDと選手データの紐付けをチェックする
- */
 function checkUserLink(user) {
     if (!user) {
         STATE.currentUser = null;
@@ -102,11 +102,9 @@ function checkUserLink(user) {
         return;
     }
 
-    // 自分のUIDが登録されている選手を探す
     const linkedPlayer = STATE.players.find(p => p.uid === user.uid);
     
     if (linkedPlayer) {
-        // --- 紐付け済みの場合 ---
         STATE.currentUser = linkedPlayer.name;
         STATE.currentUserCategory = linkedPlayer.category || 'BLUE';
         
@@ -117,28 +115,22 @@ function checkUserLink(user) {
             initMainAppUI();
             mainAppInitialized = true;
         } else {
-            // リスナーによる再描画
             updateGlobalNotifications();
             ui.renderPlayerHistory();
         }
     } else {
-        // --- 未紐付けの場合（初回ログイン） ---
         STATE.currentUser = null;
         updateSetupSelect();
         showScreen('setup-screen');
     }
 }
 
-/**
- * 初回紐付け用のプルダウン（未紐付けの選手のみ表示）を更新
- */
 function updateSetupSelect() {
     const select = document.getElementById('setup-player-select');
     if(!select) return;
     
     select.innerHTML = '<option value="" disabled selected>自分の名前を選択 ▼</option>';
     
-    // uidが未設定（未紐付け）の選手だけを抽出
     const availablePlayers = STATE.players.filter(p => !p.uid);
     availablePlayers.forEach(p => {
         const opt = document.createElement('option');
@@ -152,9 +144,6 @@ function updateSetupSelect() {
     }
 }
 
-/**
- * 選手名とFirebaseアカウント(UID)を紐付ける
- */
 async function handleLinkPlayer() {
     if(window.HAPTIC) window.HAPTIC.medium(); 
     const select = document.getElementById('setup-player-select');
@@ -172,14 +161,12 @@ async function handleLinkPlayer() {
         try {
             await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
             window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
-            // onSnapshotによりSTATE.playersが更新され、自動的に checkUserLink が呼ばれて画面遷移します
         } catch (error) {
             window.UI.showToast("紐付けに失敗しました: " + error.message, "error");
         }
     });
 }
 
-// --- 認証ハンドラー ---
 function getAuthErrorMessage(error) {
     const code = error.code;
     if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') return "メールアドレスかパスワードが間違っています。";
@@ -224,11 +211,9 @@ async function handleGoogleLogin() {
 async function handleLogout() { 
     window.UI.showConfirm("ログアウトしますか？", async () => { 
         await auth.logoutUser();
-        // onAuthChangeにより自動で auth-screen へ戻ります
     }); 
 }
 
-/* STREAMING_CHUNK:Data Fetching & Main UI setup... */
 // ==========================================
 // データフロー・Firebase購読
 // ==========================================
@@ -264,7 +249,7 @@ function setupFirebaseListeners() {
             snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
             STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             const eduTab = document.getElementById('tab-education');
-            if(eduTab && eduTab.classList.contains('active')) ui.renderEducationList();
+            if(eduTab && eduTab.classList.contains('active')) window.renderEducationList();
         });
     }
     if(window.colRefs.logs) { 
@@ -314,7 +299,23 @@ function initMainAppUI() {
     updateGlobalNotifications();
 }
 
-/* STREAMING_CHUNK:Form Events & DOM Manipulation... */
+function loadLocalData() {
+    STATE.players = JSON.parse(localStorage.getItem('team_players') || '[]'); 
+    ui.updateLoginSelect();
+    STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]').sort((a, b) => new Date(b.date) - new Date(a.date));
+    STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}'); 
+    STATE.kudos = JSON.parse(localStorage.getItem('team_kudos') || '[]'); 
+    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}'); 
+    
+    ui.renderCareTags(); 
+    ui.updateCountdownUI(); 
+    if(STATE.currentUser) { 
+        ui.renderPlayerGoal(); 
+        ui.renderCalendar(handleDateSelect); 
+        ui.updateHeaderStreak(); 
+    }
+}
+
 // ==========================================
 // フォーム入力・UIイベント
 // ==========================================
@@ -514,7 +515,6 @@ function checkSprintRank(el) {
     }
 }
 
-/* STREAMING_CHUNK:Notifications & Communications... */
 // ==========================================
 // コミュニケーション・通知系
 // ==========================================
@@ -663,7 +663,13 @@ function handleEditGoal(type) {
         if (type === 'season') updateData.seasonGoal = newGoal; 
         else updateData.monthGoal = newGoal;
         try { 
-            if (window.colRefs.goals) { await window.colRefs.goals.doc(playerName).set(updateData, { merge: true }); }
+            if (window.colRefs.goals) { 
+                await window.colRefs.goals.doc(playerName).set(updateData, { merge: true }); 
+            } else { 
+                STATE.goals[playerName] = { ...goalData, ...updateData }; 
+                localStorage.setItem('team_goals', JSON.stringify(STATE.goals)); 
+                ui.renderPlayerGoal(); 
+            } 
             window.UI.showToast("目標を更新しました！", "success"); 
         } catch (e) { window.UI.showToast("目標の保存に失敗しました。", "error"); }
     });
@@ -833,6 +839,7 @@ window.toggleNotifications = toggleNotifications;
 window.refreshAdvicePostOnly = refreshAdvicePostOnly;
 window.markBroadcastAsRead = markBroadcastAsRead;
 window.renderNotifications = renderNotifications;
+window.renderEducationList = ui.renderEducationList;
 
 // 起動
 document.addEventListener('DOMContentLoaded', initApp);
