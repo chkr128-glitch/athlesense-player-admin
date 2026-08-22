@@ -9,7 +9,6 @@ import { CONSTANTS } from '../common/constants.js';
 import { HAPTIC, UI } from '../common/utils.js';
 import { initFirebase, db, colRefs } from '../common/firebase-init.js';
 
-// グローバルスコープへ紐付け (他モジュールやインラインイベントから参照するため)
 window.CONSTANTS = CONSTANTS;
 window.HAPTIC = HAPTIC;
 window.UI = UI;
@@ -18,7 +17,6 @@ window.UI = UI;
 // 初期化プロセス
 // ==========================================
 async function initApp() {
-    // テーマの復元
     if (localStorage.getItem('theme') === 'dark') { 
         document.body.classList.add('dark-mode'); 
         document.getElementById('theme-toggle').innerHTML = '☀️'; 
@@ -26,7 +24,6 @@ async function initApp() {
         document.getElementById('theme-toggle').innerHTML = '🌙'; 
     }
     
-    // 日付の初期設定
     const today = new Date();
     const dateInput = document.getElementById('date');
     if (dateInput) {
@@ -39,7 +36,6 @@ async function initApp() {
     fetchWeather();
     checkReminders();
 
-    // Firebaseの初期化をここで明示的に待機
     const isFirebaseInitialized = await initFirebase(CONSTANTS);
     if (isFirebaseInitialized) {
         window.db = db;
@@ -112,9 +108,7 @@ function handleLogin() {
 }
 
 function handleLogout() { 
-    auth.logout(() => {
-        checkLoginStatus(); 
-    }); 
+    auth.logout(() => { checkLoginStatus(); }); 
 }
 
 // ==========================================
@@ -137,16 +131,12 @@ function setupFirebaseListeners() {
                 STATE.settings = doc.data(); 
                 ui.renderCareTags(); 
                 ui.updateCountdownUI(); 
-            } else { 
-                ui.renderCareTags(); 
-            } 
+            } else { ui.renderCareTags(); } 
         }); 
     }
-    // 💡 修正: goals, edu のリスナーを復活
     if(window.colRefs.goals) {
         window.colRefs.goals.onSnapshot(snapshot => {
-            STATE.goals = {}; 
-            snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
+            STATE.goals = {}; snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
             if(STATE.currentUser) ui.renderPlayerGoal();
         });
     }
@@ -155,11 +145,8 @@ function setupFirebaseListeners() {
             STATE.education = [];
             snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
             STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            // 必要な場合は再レンダリング処理を呼ぶ
             const eduTab = document.getElementById('tab-education');
-            if(eduTab && eduTab.classList.contains('active') && window.renderEducationList) {
-                window.renderEducationList();
-            }
+            if(eduTab && eduTab.classList.contains('active')) ui.renderEducationList();
         });
     }
     if(window.colRefs.logs) { 
@@ -184,15 +171,14 @@ function setupFirebaseListeners() {
         window.colRefs.kudos.onSnapshot(snapshot => { 
             STATE.kudos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
             if (STATE.currentUser) { 
-                updateGlobalNotifications(); 
-                ui.renderTeamActivities(handleSendKudos); 
+                updateGlobalNotifications(); ui.renderTeamActivities(handleSendKudos); 
             } 
         }); 
     }
     if(window.colRefs.broadcasts) { 
         window.colRefs.broadcasts.onSnapshot(snapshot => { 
             STATE.broadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); 
-            if (STATE.currentUser) { updateGlobalNotifications(); } 
+            if (STATE.currentUser) { updateGlobalNotifications(); updateBroadcastBanner(); } 
         }); 
     }
 }
@@ -203,14 +189,11 @@ function loadLocalData() {
     STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]').sort((a, b) => new Date(b.date) - new Date(a.date));
     STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}'); 
     STATE.kudos = JSON.parse(localStorage.getItem('team_kudos') || '[]'); 
-    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}'); // ローカル用も追加
+    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}');
     
-    ui.renderCareTags(); 
-    ui.updateCountdownUI(); 
+    ui.renderCareTags(); ui.updateCountdownUI(); 
     if(STATE.currentUser) { 
-        ui.renderPlayerGoal(); 
-        ui.renderCalendar(handleDateSelect); 
-        ui.updateHeaderStreak(); 
+        ui.renderPlayerGoal(); ui.renderCalendar(handleDateSelect); ui.updateHeaderStreak(); 
     }
 }
 
@@ -218,65 +201,30 @@ function loadLocalData() {
 // フォーム入力・UIイベント
 // ==========================================
 function setupEventListeners() {
-    const elFatigue = document.getElementById('fatigue'); 
-    const elStress = document.getElementById('stress'); 
-    const elRpe = document.getElementById('rpe'); 
-    const elDuration = document.getElementById('duration');
+    const elFatigue = document.getElementById('fatigue'); const elStress = document.getElementById('stress'); const elRpe = document.getElementById('rpe'); const elDuration = document.getElementById('duration');
     
-    if(elFatigue) elFatigue.addEventListener('input', () => { 
-        if(window.HAPTIC) window.HAPTIC.light(); 
-        ui.updateFaceMeter('fatigue-display', elFatigue.value, 'fatigue'); 
-        refreshAdvicePre(); 
-    });
-    if(elStress) elStress.addEventListener('input', () => { 
-        if(window.HAPTIC) window.HAPTIC.light(); 
-        ui.updateFaceMeter('stress-display', elStress.value, 'stress'); 
-        refreshAdvicePre(); 
-    });
-    if(elRpe) elRpe.addEventListener('input', () => { 
-        if(window.HAPTIC) window.HAPTIC.light(); 
-        refreshLoadAndAdvicePost(); 
-    });
+    if(elFatigue) elFatigue.addEventListener('input', () => { if(window.HAPTIC) window.HAPTIC.light(); ui.updateFaceMeter('fatigue-display', elFatigue.value, 'fatigue'); refreshAdvicePre(); });
+    if(elStress) elStress.addEventListener('input', () => { if(window.HAPTIC) window.HAPTIC.light(); ui.updateFaceMeter('stress-display', elStress.value, 'stress'); refreshAdvicePre(); });
+    if(elRpe) elRpe.addEventListener('input', () => { if(window.HAPTIC) window.HAPTIC.light(); refreshLoadAndAdvicePost(); });
     if(elDuration) elDuration.addEventListener('input', refreshLoadAndAdvicePost);
     
-    document.querySelectorAll('input[name="sleep-quality"], #sleep, #weight').forEach(el => { 
-        el.addEventListener('change', refreshAdvicePre); 
-    });
-    const preInj = document.getElementById('injury-pre'); 
-    if(preInj) preInj.addEventListener('input', refreshAdvicePre); 
-    const postInj = document.getElementById('injury'); 
-    if(postInj) postInj.addEventListener('input', refreshAdvicePostOnly); 
-    const badInp = document.getElementById('bad'); 
-    if(badInp) badInp.addEventListener('input', refreshAdvicePostOnly);
+    document.querySelectorAll('input[name="sleep-quality"], #sleep, #weight').forEach(el => { el.addEventListener('change', refreshAdvicePre); });
+    const preInj = document.getElementById('injury-pre'); if(preInj) preInj.addEventListener('input', refreshAdvicePre); 
+    const postInj = document.getElementById('injury'); if(postInj) postInj.addEventListener('input', refreshAdvicePostOnly); 
+    const badInp = document.getElementById('bad'); if(badInp) badInp.addEventListener('input', refreshAdvicePostOnly);
     
-    // 朝の張りボタン
     document.querySelectorAll('.tag-btn-pre').forEach(btn => {
         btn.addEventListener('click', function() { 
-            if(window.HAPTIC) window.HAPTIC.light(); 
-            const part = this.getAttribute('data-part'); 
-            if (STATE.sorenessPre.includes(part)) { 
-                STATE.sorenessPre = STATE.sorenessPre.filter(p => p !== part); 
-                this.classList.remove('selected'); 
-            } else { 
-                STATE.sorenessPre.push(part); 
-                this.classList.add('selected'); 
-            } 
+            if(window.HAPTIC) window.HAPTIC.light(); const part = this.getAttribute('data-part'); 
+            if (STATE.sorenessPre.includes(part)) { STATE.sorenessPre = STATE.sorenessPre.filter(p => p !== part); this.classList.remove('selected'); } else { STATE.sorenessPre.push(part); this.classList.add('selected'); } 
             refreshAdvicePre(); 
         });
     });
 
-    // 💡 修正: 夜の張りボタンのイベントリスナーを追加
     document.querySelectorAll('.tag-btn-post').forEach(btn => {
         btn.addEventListener('click', function() { 
-            if(window.HAPTIC) window.HAPTIC.light(); 
-            const part = this.getAttribute('data-part'); 
-            if (STATE.sorenessPost.includes(part)) { 
-                STATE.sorenessPost = STATE.sorenessPost.filter(p => p !== part); 
-                this.classList.remove('selected'); 
-            } else { 
-                STATE.sorenessPost.push(part); 
-                this.classList.add('selected'); 
-            } 
+            if(window.HAPTIC) window.HAPTIC.light(); const part = this.getAttribute('data-part'); 
+            if (STATE.sorenessPost.includes(part)) { STATE.sorenessPost = STATE.sorenessPost.filter(p => p !== part); this.classList.remove('selected'); } else { STATE.sorenessPost.push(part); this.classList.add('selected'); } 
             refreshAdvicePostOnly(); 
         });
     });
@@ -293,19 +241,14 @@ function refreshAdvicePre() {
     
     const score = logic.calcIrsScore('pre', data, STATE.sorenessPre);
     ui.updateIRSUIDisplay('pre', score);
-    
     const advices = logic.generateAIAdvicePre(data, STATE.sorenessPre);
     ui.renderAIAdvice('pre', advices);
 }
 
 function refreshLoadAndAdvicePost() {
-    const dur = parseFloat(document.getElementById('duration')?.value || 0);
-    const rpe = parseFloat(document.getElementById('rpe')?.value || 0);
+    const dur = parseFloat(document.getElementById('duration')?.value || 0); const rpe = parseFloat(document.getElementById('rpe')?.value || 0);
     ui.updateFaceMeter('rpe-display', rpe, 'rpe'); 
-    
-    const loadRes = document.getElementById('load-result'); 
-    if(loadRes) loadRes.textContent = (dur > 0 && rpe > 0) ? (dur * rpe).toFixed(1) : '-'; 
-    
+    const loadRes = document.getElementById('load-result'); if(loadRes) loadRes.textContent = (dur > 0 && rpe > 0) ? (dur * rpe).toFixed(1) : '-'; 
     refreshAdvicePostOnly();
 }
 
@@ -314,10 +257,8 @@ function refreshAdvicePostOnly() {
     const load = loadRes && loadRes.textContent !== '-' ? parseFloat(loadRes.textContent) : 0;
     
     const data = {
-        load: load,
-        rpe: parseFloat(document.getElementById('rpe')?.value || 0),
-        injury: document.getElementById('injury')?.value || '',
-        bad: document.getElementById('bad')?.value || ''
+        load: load, rpe: parseFloat(document.getElementById('rpe')?.value || 0),
+        injury: document.getElementById('injury')?.value || '', bad: document.getElementById('bad')?.value || ''
     };
     
     const score = logic.calcIrsScore('post', data, STATE.sorenessPost);
@@ -330,18 +271,15 @@ function refreshAdvicePostOnly() {
 
 function handleDateSelect(dateStr) {
     if(window.HAPTIC) window.HAPTIC.light(); 
-    const dInput = document.getElementById('date'); 
-    if(dInput) dInput.value = dateStr; 
+    const dInput = document.getElementById('date'); if(dInput) dInput.value = dateStr; 
     ui.renderCalendar(handleDateSelect); 
     
-    const parts = dateStr.split('-'); 
-    const displayStr = `${parts[1]}/${parts[2]}`; 
-    const dispPre = document.getElementById('display-date-pre'); 
-    const dispPost = document.getElementById('display-date-post'); 
-    if(dispPre) dispPre.textContent = `[ ${displayStr} ]`; 
-    if(dispPost) dispPost.textContent = `[ ${displayStr} ]`; 
+    const parts = dateStr.split('-'); const displayStr = `${parts[1]}/${parts[2]}`; 
+    const dispPre = document.getElementById('display-date-pre'); const dispPost = document.getElementById('display-date-post'); 
+    if(dispPre) dispPre.textContent = `[ ${displayStr} ]`; if(dispPost) dispPost.textContent = `[ ${displayStr} ]`; 
     
-    loadFormData(dateStr);
+    const log = STATE.logs.find(l => l.playerName === STATE.currentUser && l.date === dateStr); 
+    ui.showDailySummary(dateStr, log, markCommentAsRead);
 }
 
 function loadFormData(dateStr) {
@@ -369,9 +307,7 @@ function loadFormData(dateStr) {
         
         if (log.soreness) { 
             STATE.sorenessPre = log.soreness.split(',').map(p => p.trim()); 
-            document.querySelectorAll('.tag-btn-pre').forEach(btn => { 
-                if (STATE.sorenessPre.includes(btn.getAttribute('data-part'))) btn.classList.add('selected'); 
-            }); 
+            document.querySelectorAll('.tag-btn-pre').forEach(btn => { if (STATE.sorenessPre.includes(btn.getAttribute('data-part'))) btn.classList.add('selected'); }); 
         }
         
         const dur = document.getElementById('duration'); if (dur && log.duration) dur.value = log.duration; 
@@ -389,52 +325,36 @@ function loadFormData(dateStr) {
         
         if (log.sorenessPost) { 
             STATE.sorenessPost = log.sorenessPost.split(',').map(p => p.trim()); 
-            document.querySelectorAll('.tag-btn-post').forEach(btn => { 
-                if (STATE.sorenessPost.includes(btn.getAttribute('data-part'))) btn.classList.add('selected'); 
-            }); 
+            document.querySelectorAll('.tag-btn-post').forEach(btn => { if (STATE.sorenessPost.includes(btn.getAttribute('data-part'))) btn.classList.add('selected'); }); 
         }
         
         if (log.care) { 
             const cares = log.care.split(' / ').map(c => c.trim()).filter(c => c !== 'null' && c !== ''); 
-            document.querySelectorAll('.care-tag').forEach(btn => { 
-                if (cares.includes(btn.textContent)) { btn.classList.add('selected'); cares.splice(cares.indexOf(btn.textContent), 1); } 
-            }); 
-            if (cares.length > 0 && cares[0] !== "") { 
-                const careEl = document.getElementById('care'); if(careEl) careEl.value = cares.join(' / '); 
-            } 
+            document.querySelectorAll('.care-tag').forEach(btn => { if (cares.includes(btn.textContent)) { btn.classList.add('selected'); cares.splice(cares.indexOf(btn.textContent), 1); } }); 
+            if (cares.length > 0 && cares[0] !== "") { const careEl = document.getElementById('care'); if(careEl) careEl.value = cares.join(' / '); } 
         }
     }
     
     if(fat) ui.updateFaceMeter('fatigue-display', fat.value, 'fatigue'); 
     if(str) ui.updateFaceMeter('stress-display', str.value, 'stress'); 
     if(rpe) ui.updateFaceMeter('rpe-display', rpe.value, 'rpe'); 
-    
-    calcLoad(); 
-    calcFv(); 
-    refreshAdvicePre(); 
-    refreshAdvicePostOnly();
+    calcLoad(); calcFv(); refreshAdvicePre(); refreshAdvicePostOnly();
 }
 
 function calcLoad() { 
-    const durEl = document.getElementById('duration'); 
-    const rpeEl = document.getElementById('rpe'); 
+    const durEl = document.getElementById('duration'); const rpeEl = document.getElementById('rpe'); 
     if(!durEl || !rpeEl) return; 
-    const d = parseFloat(durEl.value) || 0; 
-    const r = parseFloat(rpeEl.value) || 0; 
+    const d = parseFloat(durEl.value) || 0; const r = parseFloat(rpeEl.value) || 0; 
     ui.updateFaceMeter('rpe-display', r, 'rpe'); 
-    const loadRes = document.getElementById('load-result'); 
-    if(loadRes) loadRes.textContent = (d > 0 && r > 0) ? (d * r).toFixed(1) : '-'; 
+    const loadRes = document.getElementById('load-result'); if(loadRes) loadRes.textContent = (d > 0 && r > 0) ? (d * r).toFixed(1) : '-'; 
     refreshAdvicePostOnly(); 
 }
 
 function calcFv() { 
-    const t30El = document.getElementById('time-30m'); 
-    const t20El = document.getElementById('time-fly20m'); 
+    const t30El = document.getElementById('time-30m'); const t20El = document.getElementById('time-fly20m'); 
     if(!t30El || !t20El) return; 
-    const t30 = parseFloat(t30El.value); 
-    const t20 = parseFloat(t20El.value); 
-    const display = document.getElementById('fv-display'); 
-    const hiddenInput = document.getElementById('fv-result'); 
+    const t30 = parseFloat(t30El.value); const t20 = parseFloat(t20El.value); 
+    const display = document.getElementById('fv-display'); const hiddenInput = document.getElementById('fv-result'); 
     
     const fvInfo = logic.calcFvProfile(t30, t20);
     if (fvInfo) { 
@@ -453,80 +373,196 @@ function addSprintRow(dist = '', time = '') {
     if(!container || !template) return;
     const clone = template.content.cloneNode(true);
     if(dist) {
-        const dInput = clone.querySelector('.sprint-dist-input');
-        const tInput = clone.querySelector('.sprint-time-input');
+        const dInput = clone.querySelector('.sprint-dist-input'); const tInput = clone.querySelector('.sprint-time-input');
         if(dInput) dInput.value = dist;
-        if(tInput) {
-            tInput.value = time;
-            setTimeout(() => checkSprintRank(tInput), 50);
-        }
+        if(tInput) { tInput.value = time; setTimeout(() => checkSprintRank(tInput), 50); }
     }
     container.appendChild(clone);
 }
 
 function checkSprintRank(el) {
     refreshAdvicePostOnly();
-    const row = el.closest('.sprint-row');
-    if (!row) return;
-    const distInput = row.querySelector('.sprint-dist-input');
-    const timeInput = row.querySelector('.sprint-time-input');
-    const badgeEl = row.querySelector('.sprint-rank-badge');
+    const row = el.closest('.sprint-row'); if (!row) return;
+    const distInput = row.querySelector('.sprint-dist-input'); const timeInput = row.querySelector('.sprint-time-input'); const badgeEl = row.querySelector('.sprint-rank-badge');
     if(!distInput || !timeInput || !badgeEl) return;
 
-    const dist = distInput.value;
-    const time = parseFloat(timeInput.value);
-
+    const dist = distInput.value; const time = parseFloat(timeInput.value);
     const rankInfo = logic.evaluateSprintRank(dist, time, STATE.logs, STATE.currentUser);
     if(rankInfo) {
-        badgeEl.textContent = rankInfo.badge;
-        badgeEl.title = rankInfo.title;
+        badgeEl.textContent = rankInfo.badge; badgeEl.title = rankInfo.title;
         if(rankInfo.isBest && window.HAPTIC) window.HAPTIC.success();
     } else {
-        badgeEl.textContent = '';
-        badgeEl.title = '';
+        badgeEl.textContent = ''; badgeEl.title = '';
     }
 }
 
+// --- 🌐 コミュニケーション・通知系 ---
 async function handleSendKudos(target, stamp, logDate) {
     if(window.HAPTIC) window.HAPTIC.medium(); 
-    const sender = STATE.currentUser; 
-    if (!sender) return;
+    const sender = STATE.currentUser; if (!sender) return;
     const existingIndex = STATE.kudos.findIndex(k => k.logDate === logDate && k.target === target && k.sender === sender);
     const kudoData = { sender, target, stamp, logDate, isRead: false, createdAt: new Date().toISOString() };
     
     try {
         if (window.colRefs && window.colRefs.kudos) {
             if (existingIndex > -1) { 
-                const docId = STATE.kudos[existingIndex].id; 
-                await window.colRefs.kudos.doc(docId).update({ stamp, isRead: false, createdAt: new Date().toISOString() }); 
-            } else { 
-                await window.colRefs.kudos.add(kudoData); 
-            }
+                const docId = STATE.kudos[existingIndex].id; await window.colRefs.kudos.doc(docId).update({ stamp, isRead: false, createdAt: new Date().toISOString() }); 
+            } else { await window.colRefs.kudos.add(kudoData); }
         } else {
             if (existingIndex > -1) { 
-                STATE.kudos[existingIndex].stamp = stamp; 
-                STATE.kudos[existingIndex].isRead = false; 
-            } else { 
-                STATE.kudos.push({ id: Date.now().toString(), ...kudoData }); 
-            }
+                STATE.kudos[existingIndex].stamp = stamp; STATE.kudos[existingIndex].isRead = false; 
+            } else { STATE.kudos.push({ id: Date.now().toString(), ...kudoData }); }
             localStorage.setItem('team_kudos', JSON.stringify(STATE.kudos));
         }
         if(window.UI) window.UI.showToast(`${target}さんにエールを送りました！`, 'success'); 
         ui.renderTeamActivities(handleSendKudos);
-    } catch(e) { 
-        if(window.UI) window.UI.showToast('送信に失敗しました', 'error'); 
-    }
+    } catch(e) { if(window.UI) window.UI.showToast('送信に失敗しました', 'error'); }
 }
 
+function getMyBroadcasts() { return STATE.broadcasts.filter(b => b.target === 'ALL' || b.target === STATE.currentUserCategory); }
+function getUnreadBroadcasts() { const myBroadcasts = getMyBroadcasts(); return myBroadcasts.filter(b => !(b.readBy && b.readBy.includes(STATE.currentUser))); }
+function getUnreadComments() { return STATE.logs.filter(log => log.playerName === STATE.currentUser && log.coachComment && !log.playerReadComment); }
+
 function updateGlobalNotifications() {
-    const unreadBroadcasts = STATE.broadcasts.filter(b => (b.target === 'ALL' || b.target === STATE.currentUserCategory) && !(b.readBy && b.readBy.includes(STATE.currentUser)));
-    const unreadComments = STATE.logs.filter(log => log.playerName === STATE.currentUser && log.coachComment && !log.playerReadComment);
+    const unreadBroadcasts = getUnreadBroadcasts();
+    const unreadComments = getUnreadComments();
     const unreadKudos = STATE.kudos.filter(k => k.target === STATE.currentUser && !k.isRead);
     
     const totalUnread = unreadBroadcasts.length + unreadComments.length + unreadKudos.length;
     ui.updateNotificationBadge(totalUnread);
 }
 
+function updateBroadcastBanner() {
+    const unreadBroadcasts = getUnreadBroadcasts(); 
+    const banner = document.getElementById('broadcast-banner'); 
+    if(!banner) return;
+    
+    if (unreadBroadcasts.length === 0) { banner.style.display = 'none'; return; }
+    
+    unreadBroadcasts.sort((a, b) => { 
+        const lScore = { 'danger': 3, 'warning': 2, 'info': 1 }; 
+        const scoreA = lScore[a.level || 'info'] || 1; 
+        const scoreB = lScore[b.level || 'info'] || 1; 
+        if (scoreA !== scoreB) return scoreB - scoreA; 
+        return new Date(b.createdAt) - new Date(a.createdAt); 
+    });
+    
+    const topMsg = unreadBroadcasts[0]; 
+    const levelDef = window.CONSTANTS.LEVELS[topMsg.level || 'info'];
+    banner.className = `broadcast-banner ${levelDef.bgClass}`; 
+    const bBadge = document.getElementById('broadcast-level-badge'); 
+    if(bBadge) { bBadge.className = `b-badge ${levelDef.bgClass}`; bBadge.textContent = levelDef.label; }
+    const bTitle = document.getElementById('broadcast-title'); if(bTitle) bTitle.textContent = topMsg.title; 
+    const bMsg = document.getElementById('broadcast-message'); if(bMsg) bMsg.textContent = topMsg.message;
+    const btn = document.getElementById('broadcast-confirm-btn'); if(btn) btn.onclick = () => markBroadcastAsRead(topMsg.id);
+    banner.style.display = 'block';
+}
+
+async function markBroadcastAsRead(broadcastId) { 
+    const banner = document.getElementById('broadcast-banner'); 
+    if(banner) banner.style.display = 'none'; 
+    if (!window.colRefs.broadcasts) return; 
+    try { await window.colRefs.broadcasts.doc(broadcastId).update({ readBy: firebase.firestore.FieldValue.arrayUnion(STATE.currentUser) }); } catch (e) { console.error(e); } 
+}
+
+async function markCommentAsRead(dateStr) { 
+    if (!window.colRefs.logs) return; 
+    const docId = `${STATE.currentUser}_${dateStr}`; 
+    try { await window.colRefs.logs.doc(docId).update({ playerReadComment: true }); } catch (e) { console.error(e); } 
+}
+
+async function markKudosAsRead() {
+    const unread = STATE.kudos.filter(k => k.target === STATE.currentUser && !k.isRead);
+    unread.forEach(async k => {
+        if(window.colRefs.kudos) { try { await window.colRefs.kudos.doc(k.id).update({ isRead: true }); } catch(e){} } 
+        else { k.isRead = true; localStorage.setItem('team_kudos', JSON.stringify(STATE.kudos)); }
+    });
+}
+
+function renderNotifications() {
+    const broadcastContainer = document.getElementById('notification-broadcast-list'); const commentContainer = document.getElementById('notification-comment-list'); const kudosContainer = document.getElementById('notification-kudos-list');
+    
+    if(broadcastContainer) {
+        broadcastContainer.innerHTML = ''; const myBroadcasts = getMyBroadcasts();
+        if (myBroadcasts.length === 0) { broadcastContainer.innerHTML = '<div style="font-size:14px; color:var(--text-muted); text-align:center; font-weight:bold;">お知らせはありません</div>'; } 
+        else { myBroadcasts.forEach(b => { 
+            const isRead = b.readBy && b.readBy.includes(STATE.currentUser); 
+            const div = document.createElement('div'); div.className = `noti-item ${isRead ? '' : 'unread'}`; 
+            const d = new Date(b.createdAt); const timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; 
+            const levelDef = window.CONSTANTS.LEVELS[b.level || 'info']; 
+            div.innerHTML = `<div class="flex-between mb-2"><span class="b-badge ${levelDef.bgClass}" style="margin:0; font-size:11px; padding:3px 8px;">${levelDef.label}</span><span style="font-size:12px; font-weight:bold; color:var(--text-muted);">${timeStr}</span></div><h4 style="margin:0 0 6px 0; font-size:16px; color:var(--text-main); font-weight:900;">${b.title}</h4><p style="margin:0; font-size:14px; color:var(--text-main); white-space:pre-wrap; font-weight:500;">${b.message}</p>${!isRead ? `<button class="btn-sync mt-3 w-full justify-center" onclick="markBroadcastAsRead('${b.id}'); setTimeout(()=>renderNotifications(), 500);">確認済みにする</button>` : ''}`; 
+            broadcastContainer.appendChild(div); 
+        }); }
+    }
+    
+    if(commentContainer) {
+        commentContainer.innerHTML = ''; const myLogsWithComments = STATE.logs.filter(log => log.playerName === STATE.currentUser && log.coachComment);
+        if (myLogsWithComments.length === 0) { commentContainer.innerHTML = '<div style="font-size:14px; color:var(--text-muted); text-align:center; font-weight:bold;">フィードバックはまだありません</div>'; } 
+        else { myLogsWithComments.sort((a, b) => { const dateA = a.coachComment.updatedAt ? new Date(a.coachComment.updatedAt) : new Date(a.date); const dateB = b.coachComment.updatedAt ? new Date(b.coachComment.updatedAt) : new Date(b.date); return dateB - dateA; }); 
+        myLogsWithComments.forEach(log => { 
+            const div = document.createElement('div'); div.className = `noti-item`; const parts = log.date.split('-'); const dateStr = `${parts[1]}/${parts[2]}`; 
+            div.innerHTML = `<div class="flex-between" style="border-bottom:1px dashed var(--border-color); padding-bottom:8px; margin-bottom:12px;"><span style="font-size:13px; font-weight:900; color:var(--primary);">${dateStr} の記録について</span><button style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:6px; font-size:12px; padding:4px 8px; cursor:pointer; color:var(--text-muted); font-weight:bold;" onclick="closeNotificationModal(); handleDateSelect('${log.date}');">詳細を見る</button></div><div style="display:flex; gap:14px; align-items:flex-start;"><div style="font-size:36px; line-height:1; text-shadow:0 2px 4px rgba(0,0,0,0.1);">${log.coachComment.stamp || ''}</div><div style="font-size:14px; color:var(--text-main); font-weight:600; white-space:pre-wrap; padding-top:6px;">${log.coachComment.text || ''}</div></div>`; 
+            commentContainer.appendChild(div); 
+        }); }
+    }
+    
+    if(kudosContainer) { 
+        kudosContainer.innerHTML = ''; const myKudos = STATE.kudos.filter(k => k.target === STATE.currentUser); 
+        if (myKudos.length === 0) { kudosContainer.innerHTML = '<div style="font-size:14px; color:var(--text-muted); text-align:center; font-weight:bold;">もらったKudosはまだありません</div>'; } 
+        else { myKudos.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(k => { 
+            const div = document.createElement('div'); div.className = `noti-item ${k.isRead ? '' : 'unread'}`; 
+            const d = new Date(k.createdAt); const timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; 
+            div.innerHTML = `<div class="flex-between mb-2"><span style="font-size:14px; font-weight:900; color:var(--primary);">👏 Kudos!</span><span style="font-size:12px; font-weight:bold; color:var(--text-muted);">${timeStr}</span></div><div style="font-size:15px; color:var(--text-main); font-weight:800; display:flex; align-items:center; gap:8px;"><span style="font-size:24px;">${k.stamp}</span> <span>${k.sender} さんからエールが届きました！</span></div>`; 
+            kudosContainer.appendChild(div); 
+        }); } 
+    }
+}
+
+function openNotificationModal() { 
+    const mod = document.getElementById('notification-modal'); 
+    if(mod) mod.style.display = 'flex'; 
+    renderNotifications(); 
+    const unreadComments = getUnreadComments(); 
+    unreadComments.forEach(log => markCommentAsRead(log.date)); 
+    markKudosAsRead(); 
+    const badge = document.getElementById('notification-badge'); 
+    if(badge) badge.style.display = 'none'; 
+}
+
+function closeNotificationModal() { 
+    const mod = document.getElementById('notification-modal'); 
+    if(mod) mod.style.display = 'none'; 
+    updateGlobalNotifications(); 
+    updateBroadcastBanner(); 
+}
+
+function handleEditGoal(type) {
+    const playerName = STATE.currentUser; 
+    if (!playerName) { window.UI.showToast("ログインし直してください！", "error"); return; }
+    const goalData = STATE.goals[playerName] || {}; 
+    const currentGoal = type === 'season' ? (goalData.seasonGoal || "") : (goalData.monthGoal || ""); 
+    const title = type === 'season' ? "今シーズンの目標" : "今月の目標・テーマ"; 
+    const desc = "目標を設定してモチベーションを高めよう！";
+    window.UI.showPrompt(title, desc, currentGoal, async (newGoal) => {
+        const updateData = { updatedAt: new Date().toISOString() }; 
+        if (type === 'season') updateData.seasonGoal = newGoal; 
+        else updateData.monthGoal = newGoal;
+        try { 
+            if (window.colRefs.goals) { 
+                await window.colRefs.goals.doc(playerName).set(updateData, { merge: true }); 
+            } else { 
+                STATE.goals[playerName] = { ...goalData, ...updateData }; 
+                localStorage.setItem('team_goals', JSON.stringify(STATE.goals)); 
+                ui.renderPlayerGoal(); 
+            } 
+            window.UI.showToast("目標を更新しました！", "success"); 
+        } catch (e) { window.UI.showToast("目標の保存に失敗しました。", "error"); }
+    });
+}
+
+// ==========================================
+// 天気・リマインダー
+// ==========================================
 function fetchWeather() {
     const locText = document.getElementById('location-text'), tempText = document.getElementById('temp-text'), adviceBox = document.getElementById('weather-advice');
     if (!navigator.geolocation) { 
@@ -612,6 +648,31 @@ function checkReminders() {
     if(!window.reminderInterval) { window.reminderInterval = setInterval(check, 60000); }
 }
 
+function toggleNotifications(checkbox) {
+    const statusText = document.getElementById('notification-status'); 
+    if(!statusText) return;
+    if(checkbox.checked) {
+        statusText.style.display = 'block'; 
+        if (!("Notification" in window)) { 
+            window.UI.showToast("ブラウザが通知非対応です。", "error"); 
+            checkbox.checked = false; return; 
+        }
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") { 
+                statusText.textContent = "✅ 通知が許可されました！"; 
+                localStorage.setItem('reminder_enabled', 'true'); 
+                new Notification("AthleSense", { body: "通知設定が完了しました！", icon: "icon.png" }); 
+            } else { 
+                statusText.textContent = "❌ 通知がブロックされました。"; 
+                checkbox.checked = false; 
+            }
+        });
+    } else { 
+        statusText.style.display = 'none'; 
+        localStorage.setItem('reminder_enabled', 'false'); 
+    }
+}
+
 function toggleTheme() {
     if(window.HAPTIC) window.HAPTIC.light();
     document.body.classList.toggle('dark-mode');
@@ -647,6 +708,20 @@ window.checkSprintRank = checkSprintRank;
 window.handleDateSelect = handleDateSelect;
 window.calcFv = calcFv;
 window.handleSyncDeviceData = (name) => { if(window.UI) window.UI.showToast(`${name}の自動取得は開発準備中です。`, "warning"); };
+
+// 今回追加したグローバルバインディング
+window.filterEducation = ui.filterEducation;
+window.renderPlayerHistory = ui.renderPlayerHistory;
+window.changeMonth = (step) => ui.changeMonth(step, handleDateSelect);
+window.closeDailySummary = ui.closeDailySummary;
+window.editDailyData = () => ui.editDailyData(loadFormData);
+window.handleEditGoal = handleEditGoal;
+window.openNotificationModal = openNotificationModal;
+window.closeNotificationModal = closeNotificationModal;
+window.toggleNotifications = toggleNotifications;
+window.refreshAdvicePostOnly = refreshAdvicePostOnly;
+window.markBroadcastAsRead = markBroadcastAsRead;
+window.renderNotifications = renderNotifications;
 
 // 起動
 document.addEventListener('DOMContentLoaded', initApp);
