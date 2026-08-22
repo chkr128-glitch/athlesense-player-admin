@@ -15,7 +15,7 @@ window.UI = UI;
 
 let playersLoaded = false;
 let mainAppInitialized = false;
-let isListenersSetup = false; // 💡 修正: リスナーの重複登録を防ぐフラグ
+let isListenersSetup = false;
 
 // ==========================================
 // 初期化プロセス
@@ -45,10 +45,8 @@ async function initApp() {
         window.db = db;
         window.colRefs = colRefs;
         
-        // 💡 修正: 起動直後のリスナー登録を削除し、認証監視の中に移動しました
         auth.onAuthChange(user => {
             if (user) {
-                // ログイン済みの場合、リスナーがまだ設定されていなければ設定する
                 if (!isListenersSetup) {
                     setupFirebaseListeners();
                     isListenersSetup = true;
@@ -56,7 +54,6 @@ async function initApp() {
                     if(playersLoaded) checkUserLink(user);
                 }
             } else {
-                // 未ログインの場合は即座にログイン画面へ
                 checkUserLink(null);
             }
         });
@@ -159,10 +156,20 @@ async function handleLinkPlayer() {
 
     window.UI.showConfirm(`「${playerName}」として登録しますか？<br><span style="font-size:12px; color:var(--color-danger);">※一度登録すると後から自分で変更できません。</span>`, async () => {
         try {
-            await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
+            if (window.colRefs && window.colRefs.players) {
+                // DBに書き込みリクエストを投げる
+                await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
+            }
+            
+            // 💡 修正箇所: データベースの反映を待たずに強制的にローカル状態を更新してメイン画面へ進める
+            playerDoc.uid = user.uid;
             window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
+            checkUserLink(user);
+            
         } catch (error) {
+            // Firestoreの権限エラー（セキュリティルール）などが発生した場合
             window.UI.showToast("紐付けに失敗しました: " + error.message, "error");
+            console.error("Link Error:", error);
         }
     });
 }
