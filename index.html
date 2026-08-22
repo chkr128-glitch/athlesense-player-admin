@@ -56,35 +56,16 @@
         </div>
     </div>
 
-    <!-- ヘッダー -->
-    <header>
-        <div class="header-left">
-            <button id="theme-toggle" class="header-icon-btn" onclick="toggleTheme()">🌙</button>
-            <button id="logout-btn" class="header-icon-btn hidden" onclick="handleLogout()" style="background: rgba(220,38,38,0.8); border-color: #fca5a5;" title="ログアウト">🚪</button>
-        </div>
-        <div class="header-center">AthleSense</div>
-        <div class="header-right">
-            <div id="header-streak-badge" class="header-streak-badge hidden">
-                <span id="header-streak-icon" style="margin-right: 4px;"></span>
-                <span id="header-streak-count"></span>
-            </div>
-            <div style="position: relative; display: flex;">
-                <button id="notification-btn" class="header-icon-btn hidden" onclick="openNotificationModal()">🔔</button>
-                <span id="notification-badge" class="hidden"></span>
-            </div>
-        </div>
-    </header>
-
     <!-- 1. ローディング画面 (初期状態確認用) -->
-    <div id="loading-screen" class="container flex-center" style="min-height: 80vh; flex-direction: column;">
+    <div id="loading-screen" class="container flex-center" style="min-height: 80vh; flex-direction: column; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999;">
         <div style="font-size: 40px; margin-bottom: 16px; animation: popIn 1s infinite alternate;">🏃‍♂️</div>
         <div style="font-size: 18px; font-weight: 900; color: var(--primary);">認証情報を確認中...</div>
     </div>
 
-    <!-- 2. 認証画面 (洗練されたモダンUI) -->
-    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, var(--secondary-light), transparent 60%); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
+    <!-- 2. 認証画面 (固定オーバーレイ＆はみ出し防止) -->
+    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); background-image: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, var(--secondary-light), transparent 60%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
         
-        <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px;">
+        <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px; width: 100%; max-width: 380px;">
             <div style="font-size: 56px; margin-bottom: 10px; text-shadow: 0 4px 12px rgba(236,72,153,0.3);">🏃‍♂️</div>
             <h1 style="font-size: 36px; font-weight: 900; color: var(--primary); margin: 0; letter-spacing: -1px;">AthleSense</h1>
             <p style="font-size: 14px; color: var(--text-main); font-weight: 700; margin-top: 8px;">コンディション管理を、もっとスマートに。</p>
@@ -103,7 +84,7 @@
             </div>
             
             <div style="display: flex; gap: 12px; margin-bottom: 20px;">
-                <button class="btn-primary" style="flex: 2; margin:0; padding: 16px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);" onclick="handleEmailLogin()">ログイン</button>
+                <button class="btn-primary" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);" onclick="handleEmailLogin()">ログイン</button>
                 <button class="tag-btn" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 800; box-shadow: none;" onclick="handleEmailRegister()">新規登録</button>
             </div>
             
@@ -120,27 +101,46 @@
     </div>
 
     <!-- 3. 名前紐付け画面 (初回のみ) -->
-    <div id="setup-screen" class="container flex-center hidden" style="flex-direction: column; min-height: 80vh;">
-        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--secondary);">
+    <div id="setup-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;">
+        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--secondary); box-sizing: border-box;">
             <h2 class="section-title flex-center mt-0" style="border: none; font-size: 24px; color: var(--secondary);">👤 選手名の紐付け</h2>
             <p style="font-size: 14px; color: var(--text-main); margin-bottom: 16px; font-weight: 600;">
                 認証が完了しました。<br>あなたの名前を選択し、アカウントと紐付けてください。
             </p>
-            <div style="background: var(--color-danger-light); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="background: var(--color-danger-light); padding: 12px; border-radius: 8px; margin-bottom: 20px; box-sizing: border-box;">
                 <span style="color:var(--color-danger); font-size:12px; font-weight:900;">⚠️ 注意: この操作は一度だけ行います。後から自分で変更することはできません。間違えないように選択してください。</span>
             </div>
-            <select id="setup-player-select" class="mb-5 text-center w-full" style="border-color: var(--secondary); font-size: 16px; padding: 16px; font-weight:900;">
+            <select id="setup-player-select" class="mb-5 text-center w-full" style="border-color: var(--secondary); font-size: 16px; padding: 16px; font-weight:900; box-sizing: border-box;">
                 <option value="" disabled selected>名前を読み込み中...</option>
             </select>
-            <button class="btn-primary" style="background: var(--secondary); border-color: var(--secondary); margin-bottom:0;" onclick="handleLinkPlayer()">この名前で登録して開始 🚀</button>
+            <button class="btn-primary" style="background: var(--secondary); border-color: var(--secondary); margin-bottom:0; box-sizing: border-box; width: 100%;" onclick="handleLinkPlayer()">この名前で登録して開始 🚀</button>
         </div>
     </div>
 
     <!-- メインアプリ -->
     <div id="main-app" class="container hidden">
         
+        <!-- ヘッダー (メインアプリの中に移動し、非表示時は完全に消えるように修正) -->
+        <header>
+            <div class="header-left">
+                <button id="theme-toggle" class="header-icon-btn" onclick="toggleTheme()">🌙</button>
+                <button id="logout-btn" class="header-icon-btn hidden" onclick="handleLogout()" style="background: rgba(220,38,38,0.8); border-color: #fca5a5;" title="ログアウト">🚪</button>
+            </div>
+            <div class="header-center">AthleSense</div>
+            <div class="header-right">
+                <div id="header-streak-badge" class="header-streak-badge hidden">
+                    <span id="header-streak-icon" style="margin-right: 4px;"></span>
+                    <span id="header-streak-count"></span>
+                </div>
+                <div style="position: relative; display: flex;">
+                    <button id="notification-btn" class="header-icon-btn hidden" onclick="openNotificationModal()">🔔</button>
+                    <span id="notification-badge" class="hidden"></span>
+                </div>
+            </div>
+        </header>
+
         <!-- 天候ウィジェット -->
-        <div class="weather-widget animate-fade-in-up" id="weather-widget">
+        <div class="weather-widget animate-fade-in-up" id="weather-widget" style="margin-top: 60px;"> <!-- ヘッダーの高さ分のマージンを追加 -->
             <div class="flex-between" style="font-weight: 900; color: var(--weather-text); font-size: 18px;">
                 <span>📍 <span id="location-text">現在地を取得中...</span></span>
                 <span id="temp-text" style="font-size: 26px;">-- ℃</span>
@@ -305,7 +305,7 @@
                      
                      <div class="form-group danger-box">
                          <div class="form-label-flex"><label style="color: var(--warning-text); font-size:16px;">🔥 ケガ・痛みの詳細 (朝)</label></div>
-                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違野感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
+                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
                      </div>
                 </div>
 
