@@ -1,7 +1,7 @@
-// ==========================================
+=========================================
 // 📌 共通定数 (Shared Constants)
 // ==========================================
-const CONSTANTS = {
+export const CONSTANTS = {
     FIREBASE_CONFIG: {
         apiKey: "AIzaSyAQoESOlZIGJfOgfIwpkL0r0YcYu4tl8ZQ",
         authDomain: "team-conditioning-controling.firebaseapp.com",
@@ -39,7 +39,6 @@ const CONSTANTS = {
         TEXT_MUTED: '#6b7280', 
         GRID_LINE: '#e5e7eb' 
     },
-    // より詳細な選手側(index)の定義をデフォルトとして採用
     DEFAULT_CARES: [
         "🍚 栄養補給(30分以内)", "🧊 アイシング", "🛁 交代浴", 
         "🧘‍♂️ 静的ストレッチ", "💆‍♂️ フォームローラー", "✋ マッサージ/ガン", 
@@ -52,5 +51,5 @@ const CONSTANTS = {
     }
 };
 
-// index.html側との互換性維持のためのエイリアス
+// 互換性維持のためのエイリアス
 CONSTANTS.FV_THRESHOLDS = CONSTANTS.THRESHOLDS;
