@@ -1,13 +1,13 @@
 // ==========================================
 // 📌 共通ユーティリティ (Haptic & UI)
 // ==========================================
-const HAPTIC = {
+export const HAPTIC = {
     light: () => { if (navigator.vibrate) navigator.vibrate(10); },
     medium: () => { if (navigator.vibrate) navigator.vibrate(30); },
     success: () => { if (navigator.vibrate) navigator.vibrate([20, 40, 20, 40, 50]); }
 };
 
-const UI = {
+export const UI = {
     toggleDisplay: (id, displayStyle) => { 
         const el = document.getElementById(id); 
         if (el) { el.classList.remove('hidden'); el.style.display = displayStyle; } 
@@ -21,8 +21,6 @@ const UI = {
         if (!container) return;
         
         const toast = document.createElement('div');
-        
-        // adminとindexで異なるCSS変数をフォールバックを利用して吸収
         const bgColors = { 
             info: 'var(--info, var(--color-info, #3b82f6))', 
             success: 'var(--good-text, var(--color-success, #10b981))', 
@@ -42,7 +40,6 @@ const UI = {
         toast.style.alignItems = 'center'; 
         toast.style.gap = '12px';
         
-        // admin(上配置)かindex(下配置)かを判定してアニメーション方向を切り替え
         const isTop = container.style.top !== '';
         toast.style.transform = isTop ? 'translateY(-20px)' : 'translateY(20px)';
         toast.style.transition = 'all 0.4s var(--ease-out-expo)';
@@ -63,7 +60,7 @@ const UI = {
         }, 3500);
     },
     showConfirm: (message, onConfirm) => {
-        if (window.HAPTIC) HAPTIC.medium();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(30);
         const modal = document.getElementById('confirm-modal');
         if (!modal) return;
         
@@ -78,17 +75,17 @@ const UI = {
         cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
 
         newOkBtn.onclick = () => { 
-            if (window.HAPTIC) HAPTIC.light(); 
+            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
             modal.style.display = 'none'; 
             if(onConfirm) onConfirm(); 
         };
         newCancelBtn.onclick = () => { 
-            if (window.HAPTIC) HAPTIC.light(); 
+            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
             modal.style.display = 'none'; 
         };
     },
     showPrompt: (title, desc, initialValue, onSave) => {
-        if (window.HAPTIC) HAPTIC.medium();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(30);
         const modal = document.getElementById('prompt-modal');
         if (!modal) return;
         
@@ -108,12 +105,12 @@ const UI = {
         cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
 
         newOkBtn.onclick = () => { 
-            if (window.HAPTIC) HAPTIC.light(); 
+            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
             modal.style.display = 'none'; 
             if(onSave) onSave(input.value); 
         };
         newCancelBtn.onclick = () => { 
-            if (window.HAPTIC) HAPTIC.light(); 
+            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
             modal.style.display = 'none'; 
         };
     }
