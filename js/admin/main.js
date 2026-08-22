@@ -2,17 +2,24 @@ import { STATE } from './state.js';
 import * as logic from './logic.js';
 import * as ui from './ui.js';
 import * as charts from './charts.js';
+import * as auth from '../common/auth.js';
 
 // --- 共通モジュールのインポート ---
 import { CONSTANTS } from '../common/constants.js';
 import { HAPTIC, UI } from '../common/utils.js';
 import { initFirebase, db, colRefs } from '../common/firebase-init.js';
 
-// グローバルスコープへ紐付け (他モジュールやインラインイベントから参照するため)
+// グローバルスコープへ紐付け
 window.CONSTANTS = CONSTANTS;
 window.HAPTIC = HAPTIC;
 window.UI = UI;
 
+let isAppInitialized = false;
+
+/* STREAMING_CHUNK:Initializing Application... */
+// ==========================================
+// 初期化プロセス
+// ==========================================
 async function initApp() {
     setDefaultDates();
     if (localStorage.getItem('theme') === 'dark') { 
@@ -20,27 +27,18 @@ async function initApp() {
         document.getElementById('theme-toggle').innerHTML = '☀️';
     }
 
-    // Firebaseの初期化をここで明示的に待機
     const isFirebaseInitialized = await initFirebase(CONSTANTS);
     if (isFirebaseInitialized) {
         window.db = db;
         window.colRefs = colRefs;
-    }
-
-    try {
-        if(window.colRefs && Object.keys(window.colRefs).length > 0) {
-            document.getElementById('connection-status').textContent = 'クラウド同期中';
-            document.getElementById('connection-status').className = 'status-badge status-cloud';
-            setupListeners();
-        } else {
-            throw new Error("Firebase is not initialized");
-        }
-    } catch (error) {
-        console.warn("Firebase Error", error);
-        document.getElementById('connection-status').textContent = 'ローカル';
-        document.getElementById('connection-status').className = 'status-badge status-local';
-        if(window.UI) window.UI.showToast("通信エラーのため、ローカルデータで起動します", "warning");
-        loadLocalData();
+        
+        // 認証状態の監視開始
+        auth.onAuthChange(user => {
+            checkAdminStatus(user);
+        });
+    } else {
+        window.UI.showToast("通信エラー: Firebaseが初期化できませんでした", "error");
+        showScreen('auth-screen');
     }
 }
 
@@ -51,6 +49,152 @@ function setDefaultDates() {
     const ym = today.substring(0, 7);
     const reportMonthEl = document.getElementById('report-month-select');
     if (reportMonthEl) reportMonthEl.value = ym;
+}
+
+/* STREAMING_CHUNK:Authentication & Admin Verification... */
+// ==========================================
+// 認証・ルーティング・キーコード検証
+// ==========================================
+function showScreen(screenId) {
+    const screens = ['loading-screen', 'auth-screen', 'setup-screen', 'main-app'];
+    screens.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) {
+            if(id === screenId) {
+                el.classList.remove('hidden');
+                el.style.display = (id === 'main-app') ? 'block' : 'flex';
+            } else {
+                el.classList.add('hidden');
+                el.style.display = 'none';
+            }
+        }
+    });
+}
+
+async function checkAdminStatus(user) {
+    if (!user) {
+        showScreen('auth-screen');
+        return;
+    }
+    
+    showScreen('loading-screen');
+    
+    try {
+        // 管理者名簿(admin_users)に登録されているか確認
+        const doc = await window.colRefs.adminUsers.doc(user.uid).get();
+        if (doc.exists) {
+            // 登録済み -> ダッシュボードへ
+            showScreen('main-app');
+            if (!isAppInitialized) {
+                initMainApp();
+                isAppInitialized = true;
+            }
+        } else {
+            // 未登録 -> キーコード入力画面へ
+            showScreen('setup-screen');
+        }
+    } catch(e) {
+        console.error(e);
+        window.UI.showToast("権限の確認に失敗しました", "error");
+        showScreen('auth-screen');
+    }
+}
+
+async function handleVerifyKeyCode() {
+    if(window.HAPTIC) window.HAPTIC.medium();
+    const inputCode = document.getElementById('admin-keycode').value;
+    if (!inputCode) {
+        window.UI.showToast("キーコードを入力してください", "warning");
+        return;
+    }
+    
+    const user = auth.getCurrentUser();
+    if (!user) return;
+    
+    try {
+        // Firebaseから正解のキーコードを取得
+        const secretDoc = await window.colRefs.settings.doc('secrets').get();
+        const correctCode = secretDoc.exists ? secretDoc.data().adminKeyCode : null;
+        
+        if (!correctCode) {
+            window.UI.showToast("システムエラー: データベースにキーコードが設定されていません", "error");
+            return;
+        }
+        
+        if (inputCode === correctCode) {
+            // 正解: 管理者名簿に登録
+            await window.colRefs.adminUsers.doc(user.uid).set({
+                email: user.email,
+                createdAt: new Date().toISOString()
+            });
+            window.UI.showToast("管理者権限を取得しました！🚀", "success");
+            
+            showScreen('main-app');
+            if (!isAppInitialized) {
+                initMainApp();
+                isAppInitialized = true;
+            }
+        } else {
+            window.UI.showToast("キーコードが間違っています", "error");
+            document.getElementById('admin-keycode').value = '';
+        }
+    } catch(e) {
+        window.UI.showToast("エラーが発生しました: " + e.message, "error");
+    }
+}
+
+function getAuthErrorMessage(error) {
+    const code = error.code;
+    if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') return "メールアドレスかパスワードが間違っています。";
+    if (code === 'auth/email-already-in-use') return "このメールアドレスは既に登録されています。";
+    if (code === 'auth/weak-password') return "パスワードは6文字以上にしてください。";
+    if (code === 'auth/invalid-email') return "メールアドレスの形式が正しくありません。";
+    return "認証エラーが発生しました: " + error.message;
+}
+
+async function handleEmailLogin() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const email = document.getElementById('auth-email').value.trim();
+    const pass = document.getElementById('auth-password').value;
+    if(!email || !pass) { window.UI.showToast('メールアドレスとパスワードを入力してください', 'warning'); return; }
+    
+    const res = await auth.loginWithEmail(email, pass);
+    if(!res.success) window.UI.showToast(getAuthErrorMessage(res.error), 'error');
+}
+
+async function handleEmailRegister() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const email = document.getElementById('auth-email').value.trim();
+    const pass = document.getElementById('auth-password').value;
+    if(!email || !pass) { window.UI.showToast('登録するメールアドレスとパスワードを入力してください', 'warning'); return; }
+    
+    const res = await auth.registerWithEmail(email, pass);
+    if(!res.success) window.UI.showToast(getAuthErrorMessage(res.error), 'error');
+}
+
+async function handleGoogleLogin() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const res = await auth.loginWithGoogle();
+    if(!res.success && res.error.code !== 'auth/popup-closed-by-user') {
+        window.UI.showToast(getAuthErrorMessage(res.error), 'error');
+    }
+}
+
+async function handleLogout() { 
+    window.UI.showConfirm("ログアウトしますか？", async () => { 
+        await auth.logoutUser(); 
+        // onAuthChangeにより自動で auth-screen へ遷移します
+    }); 
+}
+
+/* STREAMING_CHUNK:Data Fetching & Subscriptions... */
+// ==========================================
+// データフロー・Firebase購読
+// ==========================================
+function initMainApp() {
+    document.getElementById('connection-status').textContent = 'クラウド同期中';
+    document.getElementById('connection-status').className = 'status-badge status-cloud';
+    setupListeners();
 }
 
 function setupListeners() {
@@ -144,6 +288,10 @@ function updateAdminUI() {
     updateTodayView();
 }
 
+/* STREAMING_CHUNK:Table Rendering & Data Management... */
+// ==========================================
+// データの描画と操作
+// ==========================================
 function filterAndRenderTable() {
     const periodFilter = document.getElementById('period-filter') ? document.getElementById('period-filter').value : 'all';
     const searchInput = document.getElementById('search-input') ? document.getElementById('search-input').value.toLowerCase() : '';
@@ -341,6 +489,10 @@ function deleteEducation(id) {
     }
 }
 
+/* STREAMING_CHUNK:Communications & Modals... */
+// ==========================================
+// コミュニケーション機能・モーダル制御
+// ==========================================
 function openBroadcastModal() { document.getElementById('broadcast-modal').style.display = 'flex'; }
 function closeBroadcastModal() { document.getElementById('broadcast-modal').style.display = 'none'; }
 
@@ -566,8 +718,14 @@ function toggleTheme() {
 }
 
 // ==========================================
-// グローバル空間へのエクスポート
+// グローバル空間へのエクスポート (インラインイベント用)
 // ==========================================
+window.handleEmailLogin = handleEmailLogin;
+window.handleEmailRegister = handleEmailRegister;
+window.handleGoogleLogin = handleGoogleLogin;
+window.handleLogout = handleLogout;
+window.handleVerifyKeyCode = handleVerifyKeyCode;
+
 window.toggleTheme = toggleTheme;
 window.switchTab = ui.switchTab;
 window.openHistoryView = (viewId) => ui.openHistoryView(viewId, (id) => {
