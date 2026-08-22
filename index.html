@@ -7,6 +7,8 @@
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ec4899">
+    <!-- 非推奨警告の修正 -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AthleSense">
@@ -515,23 +517,6 @@
             <button type="button" onclick="this.parentElement.remove(); refreshAdvicePostOnly();" style="background: none; border: none; color: var(--warning-text); font-size: 32px; cursor: pointer; padding: 0 5px; transition:transform 0.2s;">×</button>
         </div>
     </template>
-
-    <!-- 共通JSの読み込み -->
-    <script src="js/common/constants.js"></script>
-    <script src="js/common/utils.js"></script>
-    <script src="js/common/firebase-init.js"></script>
-    <script>
-        // モジュールからアクセスできるように window オブジェクトに紐付け
-        window.CONSTANTS = CONSTANTS;
-        window.HAPTIC = HAPTIC;
-        window.UI = UI;
-
-        // Firebase初期化を実行し、完了後に window.colRefs を設定
-        initFirebase().then(() => {
-            window.db = db;
-            window.colRefs = colRefs;
-        });
-    </script>
 
     <!-- アプリケーション本体 (ES Modules) -->
     <script type="module" src="js/player/main.js"></script>
