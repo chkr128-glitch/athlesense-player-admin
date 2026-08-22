@@ -7,14 +7,17 @@
 
     <meta name="theme-color" content="#1e3a8a">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest-admin.json">
     <link rel="apple-touch-icon" href="icon-admin.png">
-    <!-- faviconの404エラー対策 -->
     <link rel="icon" href="icon-admin.png" type="image/png">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <!-- 分割したCSSの読み込み -->
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/admin.css">
@@ -48,390 +51,452 @@
         </div>
     </div>
 
-    <!-- ヘッダー -->
-    <header class="no-print">
-        <div style="width: 80px;"></div>
-        <span style="text-shadow: 0 2px 4px rgba(0,0,0,0.1);">AthleSense Admin</span>
-        <div class="flex-row-gap">
-            <span id="connection-status" class="status-badge status-local">ローカル</span>
-            <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()">🌙</button>
-        </div>
-    </header>
+    <!-- 1. ローディング画面 -->
+    <div id="loading-screen" class="container flex-center" style="min-height: 80vh; flex-direction: column; text-align: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999;">
+        <div style="font-size: 48px; margin-bottom: 16px; animation: popIn 1s infinite alternate;">🛡️</div>
+        <div style="font-size: 20px; font-weight: 900; color: var(--primary);">管理者権限を確認中...</div>
+    </div>
 
-    <div class="container no-print">
-        <!-- カウントダウン -->
-        <div id="countdown-banner" class="countdown-banner animate-pop-in"></div>
-
-        <!-- タブナビゲーション -->
-        <div class="tab-nav animate-fade-in-up">
-            <button class="tab-btn active" onclick="switchTab('today', this)">📅 指定日(本日)のログ</button>
-            <button class="tab-btn" onclick="switchTab('history', this)">📊 過去のログ・詳細分析</button>
+    <!-- 2. 認証画面 (固定オーバーレイ＆はみ出し防止) -->
+    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); background-image: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, #e0e7ff, transparent 60%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
+        
+        <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px; width: 100%; max-width: 380px;">
+            <div style="font-size: 56px; margin-bottom: 10px; text-shadow: 0 4px 12px rgba(30,58,138,0.3);">🛡️</div>
+            <h1 style="font-size: 32px; font-weight: 900; color: var(--primary); margin: 0; letter-spacing: -1px;">AthleSense Admin</h1>
+            <p style="font-size: 14px; color: var(--text-main); font-weight: 700; margin-top: 8px;">チームのコンディションを、安全に管理。</p>
         </div>
 
-        <!-- 📅 指定日タブ -->
-        <div id="tab-today" class="tab-content active">
+        <div class="glass-card animate-fade-in-up" style="width: 100%; max-width: 380px; padding: 32px 24px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-radius: 24px; animation-delay: 0.1s; box-sizing: border-box;">
             
-            <div class="glass-card" style="background: linear-gradient(135deg, var(--card-bg), var(--primary-light)); border: 1px solid var(--primary-alpha);">
-                <h3 class="section-title mt-0" style="border-bottom:none; margin-bottom:12px;">📣 コミュニケーション機能</h3>
-                <p style="font-size: 14px; color: var(--text-muted); margin-top:0; margin-bottom:16px; font-weight:700;">チーム全体へのお知らせや、選手へのメッセージを管理します。</p>
-                <div class="flex-row-gap" style="flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="openBroadcastModal()">📢 全体お知らせを作成</button>
-                    <button class="btn btn-info" onclick="openBroadcastListModal()">📋 送信履歴・既読状況</button>
-                </div>
+            <div class="form-group mb-4 text-left">
+                <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">管理者メールアドレス</label>
+                <input type="email" id="auth-email" placeholder="admin@example.com" style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0; box-sizing: border-box;">
+            </div>
+            
+            <div class="form-group mb-6 text-left">
+                <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">パスワード</label>
+                <input type="password" id="auth-password" placeholder="6文字以上の英数字" style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0; box-sizing: border-box;">
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <button class="btn btn-success" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);" onclick="handleEmailLogin()">ログイン</button>
+                <button class="btn btn-outline" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; background: var(--card-bg); font-weight: 800; border: 1px solid var(--border-color); box-shadow: none;" onclick="handleEmailRegister()">新規登録</button>
+            </div>
+            
+            <div style="display: flex; align-items: center; margin: 24px 0;">
+                <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
+                <div style="padding: 0 16px; font-size: 12px; color: var(--text-muted); font-weight: 700;">または</div>
+                <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
+            </div>
+            
+            <button style="width: 100%; background: white; color: #374151; border: 1px solid #e5e7eb; padding: 14px; border-radius: 14px; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 0; box-sizing: border-box;" onclick="handleGoogleLogin()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:20px; margin-right:12px;"> Google で続ける
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. キーコード認証画面 (初回のみ) -->
+    <div id="setup-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;">
+        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--color-danger); box-sizing: border-box;">
+            <h2 class="section-title flex-center mt-0" style="border: none; font-size: 24px; color: var(--color-danger);">🛡️ キーコード入力</h2>
+            <p style="font-size: 14px; color: var(--text-main); margin-bottom: 16px; font-weight: 600;">
+                このアカウントにはまだ管理者権限が付与されていません。<br>チームから発行されたキーコードを入力してください。
+            </p>
+            <div class="form-group text-left mb-4">
+                <input type="password" id="admin-keycode" placeholder="キーコードを入力" style="text-align: center; font-size: 20px; font-weight: bold; letter-spacing: 2px; width: 100%; box-sizing: border-box;">
+            </div>
+            <button class="btn btn-danger w-full" style="margin-bottom:0; font-size: 16px; padding: 16px; box-sizing: border-box;" onclick="handleVerifyKeyCode()">管理者権限を取得 🚀</button>
+        </div>
+    </div>
+
+    <!-- 4. メインアプリ（管理者ダッシュボード） -->
+    <div id="main-app" class="hidden">
+        <!-- ヘッダー -->
+        <header class="no-print">
+            <div style="width: 80px;"></div>
+            <span style="text-shadow: 0 2px 4px rgba(0,0,0,0.1);">AthleSense Admin</span>
+            <div class="flex-row-gap">
+                <span id="connection-status" class="status-badge status-local">ローカル</span>
+                <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()">🌙</button>
+                <button id="logout-btn" class="theme-toggle-btn" onclick="handleLogout()" style="background: rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.3); border-radius: 8px; font-size:16px;" title="ログアウト">🚪</button>
+            </div>
+        </header>
+
+        <div class="container no-print">
+            <!-- カウントダウン -->
+            <div id="countdown-banner" class="countdown-banner animate-pop-in"></div>
+
+            <!-- タブナビゲーション -->
+            <div class="tab-nav animate-fade-in-up">
+                <button class="tab-btn active" onclick="switchTab('today', this)">📅 指定日(本日)のログ</button>
+                <button class="tab-btn" onclick="switchTab('history', this)">📊 過去のログ・詳細分析</button>
             </div>
 
-            <div class="glass-card">
-                <div class="flex-between">
-                    <div class="flex-row-gap">
-                        <h3 class="section-title mt-0 mb-0" style="border: none; color: var(--primary);">📅 表示する日付:</h3>
-                        <input type="date" id="target-date" style="width: auto; margin: 0; border-color: var(--primary); font-weight: 800; background: var(--bg-color);" onchange="updateTodayView()">
-                    </div>
-                    <button class="btn btn-danger" onclick="clearAllData()">全データをリセット</button>
-                </div>
-            </div>
-
-            <h3 class="section-title">🚨 選択日のアラート状況</h3>
-            <div class="dashboard-summary">
-                <div class="summary-card info-card">
-                    <div class="summary-title">未入力の選手</div>
-                    <div class="summary-value" id="summary-missing-count">0 名</div>
-                    <div id="summary-missing-list" class="missing-list"></div>
-                </div>
-                <div class="summary-card alert-card">
-                    <div class="summary-title">疲労度高(8以上)</div>
-                    <div class="summary-value" id="summary-fatigue">0 名</div>
-                    <div id="summary-fatigue-list" class="alert-list"></div>
-                </div>
-                <div class="summary-card warning-card">
-                    <div class="summary-title">睡眠要注意(6h未満 or 質2以下)</div>
-                    <div class="summary-value" id="summary-sleep">0 名</div>
-                    <div id="summary-sleep-list" class="missing-list" style="color: var(--color-warning);"></div>
-                </div>
+            <!-- 📅 指定日タブ -->
+            <div id="tab-today" class="tab-content active">
                 
-                <div class="summary-card danger-card">
-                    <div class="summary-title">⚠️ 単調さ警告 (Monotony 2.0以上)</div>
-                    <div class="summary-value" id="summary-monotony-count">0 名</div>
-                    <div id="summary-monotony-list" class="danger-list"></div>
+                <div class="glass-card" style="background: linear-gradient(135deg, var(--card-bg), var(--primary-light)); border: 1px solid var(--primary-alpha);">
+                    <h3 class="section-title mt-0" style="border-bottom:none; margin-bottom:12px;">📣 コミュニケーション機能</h3>
+                    <p style="font-size: 14px; color: var(--text-muted); margin-top:0; margin-bottom:16px; font-weight:700;">チーム全体へのお知らせや、選手へのメッセージを管理します。</p>
+                    <div class="flex-row-gap" style="flex-wrap: wrap;">
+                        <button class="btn btn-success" onclick="openBroadcastModal()">📢 全体お知らせを作成</button>
+                        <button class="btn btn-info" onclick="openBroadcastListModal()">📋 送信履歴・既読状況</button>
+                    </div>
                 </div>
 
-                <div class="summary-card critical-card">
-                    <div class="summary-title">📈 急性負荷警告 (ACWR 1.5以上)</div>
-                    <div class="summary-value" id="summary-acwr-count">0 名</div>
-                    <div id="summary-acwr-list" class="critical-list"></div>
+                <div class="glass-card">
+                    <div class="flex-between">
+                        <div class="flex-row-gap">
+                            <h3 class="section-title mt-0 mb-0" style="border: none; color: var(--primary);">📅 表示する日付:</h3>
+                            <input type="date" id="target-date" style="width: auto; margin: 0; border-color: var(--primary); font-weight: 800; background: var(--bg-color);" onchange="updateTodayView()">
+                        </div>
+                        <button class="btn btn-danger" onclick="clearAllData()">全データをリセット</button>
+                    </div>
                 </div>
-            </div> <!-- End of dashboard-summary -->
 
-            <!-- 選択日の入力データ一覧 -->
-            <div class="glass-card" style="padding: 24px 0;">
-                <h3 class="section-title" style="border: none; margin: 0 24px 16px 24px;">📋 選択日の入力データ一覧</h3>
-                <div class="data-table-wrapper" style="border-radius: 0; border-left: none; border-right: none; box-shadow: none;">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>選手名</th><th>IRS(朝)</th><th>IRS(夜)</th><th>疲労/ｽﾄﾚｽ</th><th>Load</th>
-                                <th>スプリント</th><th>RSI</th><th>F-v診断</th><th>張り(朝)</th><th>張り(夜)</th>
-                                <th>ケガ詳細(朝/夜)</th><th>体重</th><th>心拍</th><th>歩数</th><th>睡眠</th><th>ケア</th><th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="today-table-body"></tbody>
-                    </table>
+                <h3 class="section-title">🚨 選択日のアラート状況</h3>
+                <div class="dashboard-summary">
+                    <div class="summary-card info-card">
+                        <div class="summary-title">未入力の選手</div>
+                        <div class="summary-value" id="summary-missing-count">0 名</div>
+                        <div id="summary-missing-list" class="missing-list"></div>
+                    </div>
+                    <div class="summary-card alert-card">
+                        <div class="summary-title">疲労度高(8以上)</div>
+                        <div class="summary-value" id="summary-fatigue">0 名</div>
+                        <div id="summary-fatigue-list" class="alert-list"></div>
+                    </div>
+                    <div class="summary-card warning-card">
+                        <div class="summary-title">睡眠要注意(6h未満 or 質2以下)</div>
+                        <div class="summary-value" id="summary-sleep">0 名</div>
+                        <div id="summary-sleep-list" class="missing-list" style="color: var(--color-warning);"></div>
+                    </div>
+                    
+                    <div class="summary-card danger-card">
+                        <div class="summary-title">⚠️ 単調さ警告 (Monotony 2.0以上)</div>
+                        <div class="summary-value" id="summary-monotony-count">0 名</div>
+                        <div id="summary-monotony-list" class="danger-list"></div>
+                    </div>
+
+                    <div class="summary-card critical-card">
+                        <div class="summary-title">📈 急性負荷警告 (ACWR 1.5以上)</div>
+                        <div class="summary-value" id="summary-acwr-count">0 名</div>
+                        <div id="summary-acwr-list" class="critical-list"></div>
+                    </div>
+                </div>
+
+                <!-- 選択日の入力データ一覧 -->
+                <div class="glass-card" style="padding: 24px 0;">
+                    <h3 class="section-title" style="border: none; margin: 0 24px 16px 24px;">📋 選択日の入力データ一覧</h3>
+                    <div class="data-table-wrapper" style="border-radius: 0; border-left: none; border-right: none; box-shadow: none;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>選手名</th><th>IRS(朝)</th><th>IRS(夜)</th><th>疲労/ｽﾄﾚｽ</th><th>Load</th>
+                                    <th>スプリント</th><th>RSI</th><th>F-v診断</th><th>張り(朝)</th><th>張り(夜)</th>
+                                    <th>ケガ詳細(朝/夜)</th><th>体重</th><th>心拍</th><th>歩数</th><th>睡眠</th><th>ケア</th><th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="today-table-body"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div> <!-- End of tab-today -->
 
-        <!-- 📊 履歴タブ -->
-        <div id="tab-history" class="tab-content">
-            <div class="flex-row-gap mb-4">
-                <input type="text" id="search-input" placeholder="選手名やキーワードで絞り込み..." oninput="filterAndRenderTable()" style="flex:2; background:var(--card-bg); margin:0;">
-                <select id="period-filter" onchange="filterAndRenderTable()" style="flex:1; background:var(--card-bg); border-color:var(--primary); color:var(--primary); font-weight:800; margin:0;">
-                    <option value="all">📅 すべての期間</option>
-                    <optgroup label="クイック選択">
-                        <option value="this_week">今週 (月〜日)</option>
-                        <option value="last_week">先週 (月〜日)</option>
-                        <option value="this_month">今月</option>
-                        <option value="last_month">先月</option>
-                    </optgroup>
-                    <optgroup label="月別アーカイブ" id="monthly-options"></optgroup>
-                </select>
-            </div>
-
-            <!-- メニューグリッド -->
-            <div id="history-menu" class="history-menu-grid">
-                <div class="menu-card" onclick="openHistoryView('teamTrend')"><span>📈</span>チーム全体推移</div>
-                <div class="menu-card" onclick="openHistoryView('careSettings')"><span>⚙️</span>ケア項目管理</div>
-                <div class="menu-card" onclick="openHistoryView('heatmap')"><span>🔥</span>ヒートマップ</div>
-                <div class="menu-card" onclick="openHistoryView('sprint')"><span>🏃‍♂️</span>スプリントランキング</div>
-                <div class="menu-card" onclick="openHistoryView('fv')"><span>🔬</span>F-v プロファイル</div>
-                <div class="menu-card" onclick="openHistoryView('individual')"><span>👤</span>個人詳細・PDF</div>
-                <div class="menu-card" onclick="openHistoryView('goals')"><span>🎯</span>目標・名簿管理</div>
-                <div class="menu-card" onclick="openHistoryView('education')"><span>📖</span>学び・動画管理</div>
-                <div class="menu-card" onclick="openHistoryView('alldata')"><span>📋</span>全データ一覧</div>
-            </div>
-
-            <!-- 📈 チーム推移ビュー -->
-            <div id="view-teamTrend" class="history-view glass-card">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">📈 チーム全体 コンディション推移</h3>
-                <div style="width: 100%; height: 380px; position: relative;"><canvas id="teamTrendChart"></canvas></div>
-            </div>
-            
-            <!-- ⚙️ ケア項目ビュー -->
-            <div id="view-careSettings" class="history-view glass-card">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">⚙️ ケア項目 カスタマイズ</h3>
+            <!-- 📊 履歴タブ -->
+            <div id="tab-history" class="tab-content">
                 <div class="flex-row-gap mb-4">
-                    <input type="text" id="new-care-input" placeholder="新しいケア項目を入力... (例: 酸素カプセル)" style="flex:1; margin-bottom:0;">
-                    <button class="btn btn-success" onclick="addCareOption()" style="white-space: nowrap;">➕ 追加</button>
-                </div>
-                <div id="care-options-container" class="flex-row-gap" style="flex-wrap:wrap; background:var(--input-bg); padding:20px; border-radius:16px; border:1px solid var(--border-color); box-shadow:var(--shadow-inner);"></div>
-            </div>
-
-            <!-- 🔥 ヒートマップビュー -->
-            <div id="view-heatmap" class="history-view glass-card">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">🔥 ヒートマップ (部位別ランキング)</h3>
-                <div class="heatmap-container mb-4">
-                    <div class="human-body">
-                        <svg viewBox="0 0 100 225">
-                            <text x="50" y="12" font-size="10" font-weight="bold" text-anchor="middle" fill="var(--text-muted)">【 前 】</text>
-                            <circle cx="50" cy="30" r="12" fill="var(--border-color)" /> 
-                            <rect x="32" y="45" width="36" height="65" rx="8" fill="var(--border-color)" /> 
-                            <rect x="14" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
-                            <rect x="72" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
-                            <rect x="34" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
-                            <rect x="52" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
-                            <ellipse cx="41" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
-                            <ellipse cx="59" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
-                            
-                            <circle id="heat-head-f" class="heat-spot" cx="50" cy="30" r="12" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-chest" class="heat-spot" cx="50" cy="65" r="14" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-abs" class="heat-spot" cx="50" cy="95" r="12" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-arm-l-f" class="heat-spot" cx="21" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
-                            <ellipse id="heat-arm-r-f" class="heat-spot" cx="79" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
-                            <circle id="heat-hip-l" class="heat-spot" cx="38" cy="115" r="9" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-hip-r" class="heat-spot" cx="62" cy="115" r="9" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-quads-l" class="heat-spot" cx="41" cy="150" rx="10" ry="16" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-quads-r" class="heat-spot" cx="59" cy="150" rx="10" ry="16" fill="#ef4444" opacity="0" /> 
-                        </svg>
-                    </div>
-                    <div class="human-body">
-                        <svg viewBox="0 0 100 225">
-                            <text x="50" y="12" font-size="10" font-weight="bold" text-anchor="middle" fill="var(--text-muted)">【 後 】</text>
-                            <circle cx="50" cy="30" r="12" fill="var(--border-color)" /> 
-                            <rect x="32" y="45" width="36" height="65" rx="8" fill="var(--border-color)" /> 
-                            <rect x="14" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
-                            <rect x="72" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
-                            <rect x="34" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
-                            <rect x="52" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
-                            <ellipse cx="41" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
-                            <ellipse cx="59" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
-                            
-                            <circle id="heat-head-b" class="heat-spot" cx="50" cy="30" r="12" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-shoulder-l" class="heat-spot" cx="32" cy="55" r="10" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-shoulder-r" class="heat-spot" cx="68" cy="55" r="10" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-back" class="heat-spot" cx="50" cy="85" rx="16" ry="20" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-lower-back" class="heat-spot" cx="50" cy="110" rx="14" ry="8" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-arm-l-b" class="heat-spot" cx="21" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
-                            <ellipse id="heat-arm-r-b" class="heat-spot" cx="79" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
-                            <circle id="heat-glutes-l" class="heat-spot" cx="39" cy="120" r="10" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-glutes-r" class="heat-spot" cx="61" cy="120" r="10" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-hams-l" class="heat-spot" cx="41" cy="150" rx="9" ry="15" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-hams-r" class="heat-spot" cx="59" cy="150" rx="9" ry="15" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-calves-l" class="heat-spot" cx="41" cy="180" rx="8" ry="12" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-calves-r" class="heat-spot" cx="59" cy="180" rx="8" ry="12" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-achilles-l" class="heat-spot" cx="41" cy="200" r="5" fill="#ef4444" opacity="0" /> 
-                            <circle id="heat-achilles-r" class="heat-spot" cx="59" cy="200" r="5" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-sole-l" class="heat-spot" cx="41" cy="210" rx="6" ry="4" fill="#ef4444" opacity="0" /> 
-                            <ellipse id="heat-sole-r" class="heat-spot" cx="59" cy="210" rx="6" ry="4" fill="#ef4444" opacity="0" /> 
-                        </svg>
-                    </div>
-                </div>
-                <div class="ranking-title">📋 部位別 張り・痛みランキング</div>
-                <table class="ranking-table" style="width: 320px;">
-                    <thead><tr><th style="width: 60px;">順位</th><th style="width: 180px;">筋肉部位</th><th style="width: 80px;">人数</th></tr></thead>
-                    <tbody id="soreness-ranking-body"></tbody>
-                </table>
-            </div>
-
-            <!-- 🏃‍♂️ スプリントビュー -->
-            <div id="view-sprint" class="history-view glass-card">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">🏃‍♂️ スプリント ベストタイム・ランキング</h3>
-                <div class="text-center mb-4">
-                    <select id="sprint-ranking-distance" onchange="updateSprintRanking()" style="width: auto; display: inline-block; padding: 12px 24px;">
-                        <option value="30">30m</option>
-                        <option value="50" selected>50m</option>
-                        <option value="60">60m</option>
-                        <option value="80">80m</option>
-                        <option value="100">100m</option>
-                        <option value="120">120m</option>
-                        <option value="150">150m</option>
-                        <option value="200">200m</option>
-                        <option value="250">250m</option>
-                        <option value="300">300m</option>
-                        <option value="400">400m</option>
+                    <input type="text" id="search-input" placeholder="選手名やキーワードで絞り込み..." oninput="filterAndRenderTable()" style="flex:2; background:var(--card-bg); margin:0;">
+                    <select id="period-filter" onchange="filterAndRenderTable()" style="flex:1; background:var(--card-bg); border-color:var(--primary); color:var(--primary); font-weight:800; margin:0;">
+                        <option value="all">📅 すべての期間</option>
+                        <optgroup label="クイック選択">
+                            <option value="this_week">今週 (月〜日)</option>
+                            <option value="last_week">先週 (月〜日)</option>
+                            <option value="this_month">今月</option>
+                            <option value="last_month">先月</option>
+                        </optgroup>
+                        <optgroup label="月別アーカイブ" id="monthly-options"></optgroup>
                     </select>
                 </div>
-                <table class="ranking-table" style="width: 360px;">
-                    <thead><tr><th style="width: 60px;">順位</th><th style="width: 180px;">選手名</th><th style="width: 120px;">タイム(秒)</th></tr></thead>
-                    <tbody id="sprint-ranking-body"></tbody>
-                </table>
-            </div>
 
-            <!-- 🔬 F-vプロファイルビュー -->
-            <div id="view-fv" class="history-view glass-card">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">🔬 F-v プロファイル グループ編成表</h3>
-                <div class="fv-groups-container">
-                    <div class="fv-group-row fv-force">
-                        <div class="fv-group-header">
-                            <div class="fv-group-title">💪 力不足 (Force Deficit)</div>
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:700;">30m遅い / 比率 2.15以上</div>
-                        </div>
-                        <div class="fv-player-list" id="fv-list-force"></div>
-                    </div>
-                    <div class="fv-group-row fv-balanced">
-                        <div class="fv-group-header">
-                            <div class="fv-group-title">⚖️ バランス型 (Optimal)</div>
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:700;">最適ゾーン</div>
-                        </div>
-                        <div class="fv-player-list" id="fv-list-balanced"></div>
-                    </div>
-                    <div class="fv-group-row fv-velocity">
-                        <div class="fv-group-header">
-                            <div class="fv-group-title">⚡ 速度不足 (Velocity Deficit)</div>
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:700;">Fly20m遅い / 比率 1.95以下</div>
-                        </div>
-                        <div class="fv-player-list" id="fv-list-velocity"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 👤 個人詳細ビュー -->
-            <div id="view-individual" class="history-view glass-card">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">👤 選手別 詳細分析</h3>
-                <div class="flex-row-gap mb-5">
-                    <select id="chart-player-select" onchange="updateCharts()" style="flex:1; margin-bottom:0;"></select>
-                    <input type="month" id="report-month-select" style="flex:1; margin-bottom:0;">
-                    <button class="btn btn-success" onclick="generateMonthlyReport()">📊 面談用レポート作成(PDF)</button>
-                </div>
-                <div class="analysis-container">
-                    <div class="chart-area">
-                        <div style="margin-bottom: 40px; height: 320px; position: relative; width: 100%;"><canvas id="loadChart"></canvas></div>
-                        <div style="height: 320px; position: relative; width: 100%;"><canvas id="rsiChart"></canvas></div>
-                    </div>
-                    <div class="stats-area">
-                        <h4 style="margin-top:0; color:var(--primary); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; font-size:16px;">指定期間の平均指標</h4>
-                        <div class="mb-4">
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">Total Load</div>
-                            <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-total-load">-</div>
-                        </div>
-                        <div class="mb-4">
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">Training Monotony</div>
-                            <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-monotony">-</div>
-                            <div style="font-size:12px; color:var(--text-muted); font-weight:700;">2.0以上でオーバートレーニングの警告</div>
-                        </div>
-                        <div class="mb-4">
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">Training Strain</div>
-                            <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-strain">-</div>
-                        </div>
-                        <div class="mb-4">
-                            <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">ACWR (過去4週比)</div>
-                            <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-acwr">-</div>
-                            <div style="font-size:12px; color:var(--text-muted); font-weight:700;">1.5以上でケガリスク大</div>
-                        </div>
-                        
-                        <div style="margin-top: 30px; padding-top: 24px; border-top: 2px dashed var(--border-color);">
-                            <h4 style="margin-top:0; color:var(--primary); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; font-size:15px;">ケガ・痛みの詳細報告</h4>
-                            <ul id="player-injury-list" style="font-size: 13px; padding-left: 20px; margin: 0; color: var(--text-main); font-weight:600; min-height: 40px; line-height:1.6;"></ul>
-                        </div>
-                        <div style="margin-top: 30px; padding-top: 24px; border-top: 2px dashed var(--border-color);">
-                            <h4 style="margin-top:0; color:var(--primary); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; font-size:15px;">頻発する張り</h4>
-                            <ul id="player-soreness-list" style="font-size: 13px; padding-left: 20px; margin: 0; color: var(--text-main); font-weight:600; min-height: 40px; line-height:1.6;"></ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 🎯 目標・名簿管理ビュー -->
-            <div id="view-goals" class="history-view glass-card" style="padding-bottom: 0;">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <div style="background-color: var(--secondary-light); border: 2px solid var(--secondary); border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow:var(--shadow-md);">
-                    <h4 style="margin: 0 0 12px 0; color: var(--secondary); display: flex; align-items: center; gap: 8px; font-size:18px; font-weight:900;">🏆 チーム目標大会の設定</h4>
-                    <p style="font-size: 14px; color: var(--text-main); margin-top: 0; font-weight:700; margin-bottom:16px;">ここで設定した大会までのカウントダウンが全選手のスマホ画面のトップに表示されます。</p>
-                    <div class="flex-row-gap" style="flex-wrap: wrap;">
-                        <input type="text" id="target-event-name" placeholder="大会名 (例: 県大会)" style="flex: 1; min-width: 180px; margin-bottom: 0;">
-                        <input type="date" id="target-event-date" style="flex: 1; min-width: 180px; margin-bottom: 0;">
-                        <button class="btn btn-success" onclick="saveTeamSettings()" style="margin-bottom: 0;">💾 設定を保存・同期</button>
-                    </div>
+                <!-- メニューグリッド -->
+                <div id="history-menu" class="history-menu-grid">
+                    <div class="menu-card" onclick="openHistoryView('teamTrend')"><span>📈</span>チーム全体推移</div>
+                    <div class="menu-card" onclick="openHistoryView('careSettings')"><span>⚙️</span>ケア項目管理</div>
+                    <div class="menu-card" onclick="openHistoryView('heatmap')"><span>🔥</span>ヒートマップ</div>
+                    <div class="menu-card" onclick="openHistoryView('sprint')"><span>🏃‍♂️</span>スプリントランキング</div>
+                    <div class="menu-card" onclick="openHistoryView('fv')"><span>🔬</span>F-v プロファイル</div>
+                    <div class="menu-card" onclick="openHistoryView('individual')"><span>👤</span>個人詳細・PDF</div>
+                    <div class="menu-card" onclick="openHistoryView('goals')"><span>🎯</span>目標・名簿管理</div>
+                    <div class="menu-card" onclick="openHistoryView('education')"><span>📖</span>学び・動画管理</div>
+                    <div class="menu-card" onclick="openHistoryView('alldata')"><span>📋</span>全データ一覧</div>
                 </div>
 
-                <h3 class="section-title">📋 選手名簿の管理</h3>
-                <div class="flex-row-gap mb-4">
-                     <input type="text" id="new-player-name" placeholder="新しい選手名..." style="margin-bottom: 0; flex: 1;">
-                     <select id="new-player-category" style="width: 140px; margin-bottom: 0; font-weight: 900;">
-                         <option value="BLUE">🟦 BLUE</option><option value="RED">🟥 RED</option><option value="YELLOW">🟨 YELLOW</option>
-                     </select>
-                     <button class="btn btn-success" onclick="addPlayer()" style="white-space: nowrap;">➕ 追加</button>
+                <!-- 📈 チーム推移ビュー -->
+                <div id="view-teamTrend" class="history-view glass-card">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">📈 チーム全体 コンディション推移</h3>
+                    <div style="width: 100%; height: 380px; position: relative;"><canvas id="teamTrendChart"></canvas></div>
                 </div>
-                <div id="registered-players-list" class="mb-5"></div>
+                
+                <!-- ⚙️ ケア項目ビュー -->
+                <div id="view-careSettings" class="history-view glass-card">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">⚙️ ケア項目 カスタマイズ</h3>
+                    <div class="flex-row-gap mb-4">
+                        <input type="text" id="new-care-input" placeholder="新しいケア項目を入力... (例: 酸素カプセル)" style="flex:1; margin-bottom:0;">
+                        <button class="btn btn-success" onclick="addCareOption()" style="white-space: nowrap;">➕ 追加</button>
+                    </div>
+                    <div id="care-options-container" class="flex-row-gap" style="flex-wrap:wrap; background:var(--input-bg); padding:20px; border-radius:16px; border:1px solid var(--border-color); box-shadow:var(--shadow-inner);"></div>
+                </div>
 
-                <h3 class="section-title">🎯 選手目標・テーマ管理</h3>
-                <div class="data-table-wrapper" style="margin-bottom: 24px;">
-                    <table class="data-table" style="min-width: 800px;">
-                         <thead><tr><th style="width: 180px;">選手名</th><th>🎯 今シーズンの目標</th><th>🗓️ 今月の目標・テーマ</th></tr></thead>
-                         <tbody id="goals-table-body"></tbody>
+                <!-- 🔥 ヒートマップビュー -->
+                <div id="view-heatmap" class="history-view glass-card">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">🔥 ヒートマップ (部位別ランキング)</h3>
+                    <div class="heatmap-container mb-4">
+                        <div class="human-body">
+                            <svg viewBox="0 0 100 225">
+                                <text x="50" y="12" font-size="10" font-weight="bold" text-anchor="middle" fill="var(--text-muted)">【 前 】</text>
+                                <circle cx="50" cy="30" r="12" fill="var(--border-color)" /> 
+                                <rect x="32" y="45" width="36" height="65" rx="8" fill="var(--border-color)" /> 
+                                <rect x="14" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
+                                <rect x="72" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
+                                <rect x="34" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
+                                <rect x="52" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
+                                <ellipse cx="41" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
+                                <ellipse cx="59" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
+                                
+                                <circle id="heat-head-f" class="heat-spot" cx="50" cy="30" r="12" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-chest" class="heat-spot" cx="50" cy="65" r="14" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-abs" class="heat-spot" cx="50" cy="95" r="12" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-arm-l-f" class="heat-spot" cx="21" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
+                                <ellipse id="heat-arm-r-f" class="heat-spot" cx="79" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
+                                <circle id="heat-hip-l" class="heat-spot" cx="38" cy="115" r="9" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-hip-r" class="heat-spot" cx="62" cy="115" r="9" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-quads-l" class="heat-spot" cx="41" cy="150" rx="10" ry="16" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-quads-r" class="heat-spot" cx="59" cy="150" rx="10" ry="16" fill="#ef4444" opacity="0" /> 
+                            </svg>
+                        </div>
+                        <div class="human-body">
+                            <svg viewBox="0 0 100 225">
+                                <text x="50" y="12" font-size="10" font-weight="bold" text-anchor="middle" fill="var(--text-muted)">【 後 】</text>
+                                <circle cx="50" cy="30" r="12" fill="var(--border-color)" /> 
+                                <rect x="32" y="45" width="36" height="65" rx="8" fill="var(--border-color)" /> 
+                                <rect x="14" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
+                                <rect x="72" y="50" width="14" height="60" rx="7" fill="var(--border-color)" /> 
+                                <rect x="34" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
+                                <rect x="52" y="115" width="14" height="90" rx="7" fill="var(--border-color)" /> 
+                                <ellipse cx="41" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
+                                <ellipse cx="59" cy="210" rx="8" ry="5" fill="var(--border-color)" /> 
+                                
+                                <circle id="heat-head-b" class="heat-spot" cx="50" cy="30" r="12" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-shoulder-l" class="heat-spot" cx="32" cy="55" r="10" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-shoulder-r" class="heat-spot" cx="68" cy="55" r="10" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-back" class="heat-spot" cx="50" cy="85" rx="16" ry="20" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-lower-back" class="heat-spot" cx="50" cy="110" rx="14" ry="8" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-arm-l-b" class="heat-spot" cx="21" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
+                                <ellipse id="heat-arm-r-b" class="heat-spot" cx="79" cy="80" rx="7" ry="25" fill="#ef4444" opacity="0" />
+                                <circle id="heat-glutes-l" class="heat-spot" cx="39" cy="120" r="10" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-glutes-r" class="heat-spot" cx="61" cy="120" r="10" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-hams-l" class="heat-spot" cx="41" cy="150" rx="9" ry="15" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-hams-r" class="heat-spot" cx="59" cy="150" rx="9" ry="15" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-calves-l" class="heat-spot" cx="41" cy="180" rx="8" ry="12" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-calves-r" class="heat-spot" cx="59" cy="180" rx="8" ry="12" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-achilles-l" class="heat-spot" cx="41" cy="200" r="5" fill="#ef4444" opacity="0" /> 
+                                <circle id="heat-achilles-r" class="heat-spot" cx="59" cy="200" r="5" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-sole-l" class="heat-spot" cx="41" cy="210" rx="6" ry="4" fill="#ef4444" opacity="0" /> 
+                                <ellipse id="heat-sole-r" class="heat-spot" cx="59" cy="210" rx="6" ry="4" fill="#ef4444" opacity="0" /> 
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ranking-title">📋 部位別 張り・痛みランキング</div>
+                    <table class="ranking-table" style="width: 320px;">
+                        <thead><tr><th style="width: 60px;">順位</th><th style="width: 180px;">筋肉部位</th><th style="width: 80px;">人数</th></tr></thead>
+                        <tbody id="soreness-ranking-body"></tbody>
                     </table>
                 </div>
-            </div>
 
-            <!-- 📖 学び管理ビュー -->
-            <div id="view-education" class="history-view glass-card" style="padding-bottom: 0;">
-                <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                <h3 class="section-title mt-0">📖 学び・動画コンテンツ管理</h3>
-                <div style="background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow:var(--shadow-inner);">
-                    <div class="flex-row-gap mb-3" style="flex-wrap: wrap;">
-                        <input type="text" id="edu-title" placeholder="タイトル (例: 正しいハムのケア)" style="flex: 2; min-width: 240px; margin-bottom: 0;">
-                        <select id="edu-category" style="flex: 1; min-width: 160px; margin-bottom: 0;">
-                            <option value="ケア・リカバリー">ケア・リカバリー</option><option value="トレーニング理論">トレーニング理論</option>
-                            <option value="栄養・食事">栄養・食事</option><option value="メンタル">メンタル</option><option value="その他">その他</option>
+                <!-- 🏃‍♂️ スプリントビュー -->
+                <div id="view-sprint" class="history-view glass-card">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">🏃‍♂️ スプリント ベストタイム・ランキング</h3>
+                    <div class="text-center mb-4">
+                        <select id="sprint-ranking-distance" onchange="updateSprintRanking()" style="width: auto; display: inline-block; padding: 12px 24px;">
+                            <option value="30">30m</option>
+                            <option value="50" selected>50m</option>
+                            <option value="60">60m</option>
+                            <option value="80">80m</option>
+                            <option value="100">100m</option>
+                            <option value="120">120m</option>
+                            <option value="150">150m</option>
+                            <option value="200">200m</option>
+                            <option value="250">250m</option>
+                            <option value="300">300m</option>
+                            <option value="400">400m</option>
                         </select>
                     </div>
-                    <input type="text" id="edu-url" placeholder="YouTubeのURL (任意)" class="mb-3">
-                    <textarea id="edu-desc" rows="3" placeholder="説明やアドバイス..." class="mb-4"></textarea>
-                    <button class="btn btn-success w-full" onclick="addEducation()">➕ コンテンツを追加・配信</button>
-                </div>
-                <div class="data-table-wrapper" style="margin-bottom: 24px;">
-                    <table class="data-table">
-                         <thead><tr><th style="width: 150px;">カテゴリ</th><th>タイトル / 説明</th><th style="width: 100px;">操作</th></tr></thead>
-                         <tbody id="education-table-body"></tbody>
+                    <table class="ranking-table" style="width: 360px;">
+                        <thead><tr><th style="width: 60px;">順位</th><th style="width: 180px;">選手名</th><th style="width: 120px;">タイム(秒)</th></tr></thead>
+                        <tbody id="sprint-ranking-body"></tbody>
                     </table>
                 </div>
-            </div>
 
-            <!-- 📋 全データ一覧ビュー -->
-            <div id="view-alldata" class="history-view glass-card" style="padding: 24px 0;">
-                <div class="flex-between mb-4" style="padding: 0 24px;">
-                     <button class="back-btn mb-0" onclick="backToHistoryMenu()">← メニューに戻る</button>
-                     <button class="btn btn-success mb-0" onclick="downloadCSV()">📥 エクセル(CSV)で保存</button>
+                <!-- 🔬 F-vプロファイルビュー -->
+                <div id="view-fv" class="history-view glass-card">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">🔬 F-v プロファイル グループ編成表</h3>
+                    <div class="fv-groups-container">
+                        <div class="fv-group-row fv-force">
+                            <div class="fv-group-header">
+                                <div class="fv-group-title">💪 力不足 (Force Deficit)</div>
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:700;">30m遅い / 比率 2.15以上</div>
+                            </div>
+                            <div class="fv-player-list" id="fv-list-force"></div>
+                        </div>
+                        <div class="fv-group-row fv-balanced">
+                            <div class="fv-group-header">
+                                <div class="fv-group-title">⚖️ バランス型 (Optimal)</div>
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:700;">最適ゾーン</div>
+                            </div>
+                            <div class="fv-player-list" id="fv-list-balanced"></div>
+                        </div>
+                        <div class="fv-group-row fv-velocity">
+                            <div class="fv-group-header">
+                                <div class="fv-group-title">⚡ 速度不足 (Velocity Deficit)</div>
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:700;">Fly20m遅い / 比率 1.95以下</div>
+                            </div>
+                            <div class="fv-player-list" id="fv-list-velocity"></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="data-table-wrapper" style="border-radius: 0; border-left: none; border-right: none; box-shadow: none; margin-bottom: 0;">
-                    <table class="data-table">
-                         <thead>
-                             <tr>
-                                <th>日付</th><th>選手名</th><th>IRS(朝)</th><th>IRS(夜)</th><th>疲労/ｽﾄﾚｽ</th><th>Load</th>
-                                <th>スプリント</th><th>RSI</th><th>F-v診断</th><th>張り(朝)</th><th>張り(夜)</th>
-                                <th>ケガ詳細(朝/夜)</th><th>体重</th><th>心拍</th><th>歩数</th><th>睡眠</th><th>ケア</th><th>操作</th>
-                             </tr>
-                         </thead>
-                         <tbody id="history-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
 
-        </div> <!-- End of tab-history -->
-    </div>
+                <!-- 👤 個人詳細ビュー -->
+                <div id="view-individual" class="history-view glass-card">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">👤 選手別 詳細分析</h3>
+                    <div class="flex-row-gap mb-5">
+                        <select id="chart-player-select" onchange="updateCharts()" style="flex:1; margin-bottom:0;"></select>
+                        <input type="month" id="report-month-select" style="flex:1; margin-bottom:0;">
+                        <button class="btn btn-success" onclick="generateMonthlyReport()">📊 面談用レポート作成(PDF)</button>
+                    </div>
+                    <div class="analysis-container">
+                        <div class="chart-area">
+                            <div style="margin-bottom: 40px; height: 320px; position: relative; width: 100%;"><canvas id="loadChart"></canvas></div>
+                            <div style="height: 320px; position: relative; width: 100%;"><canvas id="rsiChart"></canvas></div>
+                        </div>
+                        <div class="stats-area">
+                            <h4 style="margin-top:0; color:var(--primary); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; font-size:16px;">指定期間の平均指標</h4>
+                            <div class="mb-4">
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">Total Load</div>
+                                <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-total-load">-</div>
+                            </div>
+                            <div class="mb-4">
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">Training Monotony</div>
+                                <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-monotony">-</div>
+                                <div style="font-size:12px; color:var(--text-muted); font-weight:700;">2.0以上でオーバートレーニングの警告</div>
+                            </div>
+                            <div class="mb-4">
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">Training Strain</div>
+                                <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-strain">-</div>
+                            </div>
+                            <div class="mb-4">
+                                <div style="font-size:13px; color:var(--text-muted); font-weight:900; text-transform:uppercase;">ACWR (過去4週比)</div>
+                                <div style="font-size:24px; font-weight:900; color:var(--text-main);" id="stat-acwr">-</div>
+                                <div style="font-size:12px; color:var(--text-muted); font-weight:700;">1.5以上でケガリスク大</div>
+                            </div>
+                            
+                            <div style="margin-top: 30px; padding-top: 24px; border-top: 2px dashed var(--border-color);">
+                                <h4 style="margin-top:0; color:var(--primary); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; font-size:15px;">ケガ・痛みの詳細報告</h4>
+                                <ul id="player-injury-list" style="font-size: 13px; padding-left: 20px; margin: 0; color: var(--text-main); font-weight:600; min-height: 40px; line-height:1.6;"></ul>
+                            </div>
+                            <div style="margin-top: 30px; padding-top: 24px; border-top: 2px dashed var(--border-color);">
+                                <h4 style="margin-top:0; color:var(--primary); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; font-size:15px;">頻発する張り</h4>
+                                <ul id="player-soreness-list" style="font-size: 13px; padding-left: 20px; margin: 0; color: var(--text-main); font-weight:600; min-height: 40px; line-height:1.6;"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🎯 目標・名簿管理ビュー -->
+                <div id="view-goals" class="history-view glass-card" style="padding-bottom: 0;">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <div style="background-color: var(--secondary-light); border: 2px solid var(--secondary); border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow:var(--shadow-md);">
+                        <h4 style="margin: 0 0 12px 0; color: var(--secondary); display: flex; align-items: center; gap: 8px; font-size:18px; font-weight:900;">🏆 チーム目標大会の設定</h4>
+                        <p style="font-size: 14px; color: var(--text-main); margin-top: 0; font-weight:700; margin-bottom:16px;">ここで設定した大会までのカウントダウンが全選手のスマホ画面のトップに表示されます。</p>
+                        <div class="flex-row-gap" style="flex-wrap: wrap;">
+                            <input type="text" id="target-event-name" placeholder="大会名 (例: 県大会)" style="flex: 1; min-width: 180px; margin-bottom: 0;">
+                            <input type="date" id="target-event-date" style="flex: 1; min-width: 180px; margin-bottom: 0;">
+                            <button class="btn btn-success" onclick="saveTeamSettings()" style="margin-bottom: 0;">💾 設定を保存・同期</button>
+                        </div>
+                    </div>
+
+                    <h3 class="section-title">📋 選手名簿の管理</h3>
+                    <div class="flex-row-gap mb-4">
+                        <input type="text" id="new-player-name" placeholder="新しい選手名..." style="margin-bottom: 0; flex: 1;">
+                        <select id="new-player-category" style="width: 140px; margin-bottom: 0; font-weight: 900;">
+                            <option value="BLUE">🟦 BLUE</option><option value="RED">🟥 RED</option><option value="YELLOW">🟨 YELLOW</option>
+                        </select>
+                        <button class="btn btn-success" onclick="addPlayer()" style="white-space: nowrap;">➕ 追加</button>
+                    </div>
+                    <div id="registered-players-list" class="mb-5"></div>
+
+                    <h3 class="section-title">🎯 選手目標・テーマ管理</h3>
+                    <div class="data-table-wrapper" style="margin-bottom: 24px;">
+                        <table class="data-table" style="min-width: 800px;">
+                            <thead><tr><th style="width: 180px;">選手名</th><th>🎯 今シーズンの目標</th><th>🗓️ 今月の目標・テーマ</th></tr></thead>
+                            <tbody id="goals-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 📖 学び管理ビュー -->
+                <div id="view-education" class="history-view glass-card" style="padding-bottom: 0;">
+                    <button class="back-btn" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                    <h3 class="section-title mt-0">📖 学び・動画コンテンツ管理</h3>
+                    <div style="background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow:var(--shadow-inner);">
+                        <div class="flex-row-gap mb-3" style="flex-wrap: wrap;">
+                            <input type="text" id="edu-title" placeholder="タイトル (例: 正しいハムのケア)" style="flex: 2; min-width: 240px; margin-bottom: 0;">
+                            <select id="edu-category" style="flex: 1; min-width: 160px; margin-bottom: 0;">
+                                <option value="ケア・リカバリー">ケア・リカバリー</option><option value="トレーニング理論">トレーニング理論</option>
+                                <option value="栄養・食事">栄養・食事</option><option value="メンタル">メンタル</option><option value="その他">その他</option>
+                            </select>
+                        </div>
+                        <input type="text" id="edu-url" placeholder="YouTubeのURL (任意)" class="mb-3">
+                        <textarea id="edu-desc" rows="3" placeholder="説明やアドバイス..." class="mb-4"></textarea>
+                        <button class="btn btn-success w-full" onclick="addEducation()">➕ コンテンツを追加・配信</button>
+                    </div>
+                    <div class="data-table-wrapper" style="margin-bottom: 24px;">
+                        <table class="data-table">
+                            <thead><tr><th style="width: 150px;">カテゴリ</th><th>タイトル / 説明</th><th style="width: 100px;">操作</th></tr></thead>
+                            <tbody id="education-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 📋 全データ一覧ビュー -->
+                <div id="view-alldata" class="history-view glass-card" style="padding: 24px 0;">
+                    <div class="flex-between mb-4" style="padding: 0 24px;">
+                        <button class="back-btn mb-0" onclick="backToHistoryMenu()">← メニューに戻る</button>
+                        <button class="btn btn-success mb-0" onclick="downloadCSV()">📥 エクセル(CSV)で保存</button>
+                    </div>
+                    <div class="data-table-wrapper" style="border-radius: 0; border-left: none; border-right: none; box-shadow: none; margin-bottom: 0;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>日付</th><th>選手名</th><th>IRS(朝)</th><th>IRS(夜)</th><th>疲労/ｽﾄﾚｽ</th><th>Load</th>
+                                    <th>スプリント</th><th>RSI</th><th>F-v診断</th><th>張り(朝)</th><th>張り(夜)</th>
+                                    <th>ケガ詳細(朝/夜)</th><th>体重</th><th>心拍</th><th>歩数</th><th>睡眠</th><th>ケア</th><th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div> <!-- End of tab-history -->
+        </div>
+    </div> <!-- End of main-app -->
 
     <!-- コミュニケーション用モーダル -->
     <div id="broadcast-modal" class="modal-overlay">
@@ -530,12 +595,7 @@
         </div>
     </div>
 
-    <!-- Firebase / Chart.js -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
-    <!-- アプリケーション本体 (ES Modules) -->
+    <!-- アプリケーション本体 -->
     <script type="module" src="js/admin/main.js"></script>
 </body>
 </html>

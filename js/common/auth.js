@@ -1,51 +1,63 @@
-// ==========================================
-// 📌 認証・セッション管理 (Auth)
-// アプリケーション内のログイン状態を管理します
-// ==========================================
+/**
+ * ログイン状態の変更を監視します
+ */
+export function onAuthChange(callback) {
+    return firebase.auth().onAuthStateChanged(callback);
+}
 
 /**
- * 現在のログインユーザーを取得します
- * @returns {string|null} ユーザー名、未ログイン時はnull
+ * 現在ログインしているFirebaseユーザーオブジェクトを取得します
  */
 export function getCurrentUser() {
-    return localStorage.getItem('currentUser');
+    return firebase.auth().currentUser;
 }
 
 /**
- * ユーザーのログイン処理を行います
- * @param {string} playerName - 選択された選手名
- * @returns {boolean} 成功したかどうか
+ * メールアドレスとパスワードでログインします
  */
-export function login(playerName) {
-    if (!playerName) {
-        if (window.UI) window.UI.showToast("名前を選択してください。", "warning");
-        return false;
+export async function loginWithEmail(email, password) {
+    try {
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        return { success: true, user: userCredential.user };
+    } catch (error) {
+        return { success: false, error: error };
     }
-    
-    if (window.HAPTIC) window.HAPTIC.medium(); 
-    localStorage.setItem('currentUser', playerName);
-    
-    if (window.UI) window.UI.showToast(`${playerName} さん、こんにちは！`, "success");
-    return true;
 }
 
 /**
- * ログアウト処理を行います（確認ダイアログ付き）
- * @param {Function} onLogoutSuccess - ログアウト完了後に実行するコールバック（リロードなど）
+ * メールアドレスとパスワードで新規登録します
  */
-export function logout(onLogoutSuccess) {
-    if (window.UI) {
-        window.UI.showConfirm("ログアウトしますか？", () => { 
-            localStorage.removeItem('currentUser'); 
-            if (onLogoutSuccess) onLogoutSuccess();
-            else location.reload(); 
-        });
-    } else {
-        // UIが読み込まれていない場合のフォールバック
-        if (confirm("ログアウトしますか？")) {
-            localStorage.removeItem('currentUser');
-            if (onLogoutSuccess) onLogoutSuccess();
-            else location.reload();
-        }
+export async function registerWithEmail(email, password) {
+    try {
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        return { success: true, user: userCredential.user };
+    } catch (error) {
+        return { success: false, error: error };
+    }
+}
+
+/**
+ * Googleアカウントでログイン（ポップアップ）します
+ */
+export async function loginWithGoogle() {
+    try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        const userCredential = await firebase.auth().signInWithPopup(provider);
+        return { success: true, user: userCredential.user };
+    } catch (error) {
+        return { success: false, error: error };
+    }
+}
+
+/**
+ * ログアウト処理を行います
+ */
+export async function logoutUser() {
+    try {
+        await firebase.auth().signOut();
+        return true;
+    } catch (error) {
+        console.error("Logout Error:", error);
+        return false;
     }
 }

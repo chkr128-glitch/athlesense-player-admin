@@ -13,6 +13,10 @@ window.CONSTANTS = CONSTANTS;
 window.HAPTIC = HAPTIC;
 window.UI = UI;
 
+let playersLoaded = false;
+let mainAppInitialized = false;
+let isListenersSetup = false; // 💡 修正: リスナーの重複登録を防ぐフラグ
+
 // ==========================================
 // 初期化プロセス
 // ==========================================
@@ -40,75 +44,174 @@ async function initApp() {
     if (isFirebaseInitialized) {
         window.db = db;
         window.colRefs = colRefs;
-    }
-
-    try {
-        if(window.colRefs && Object.keys(window.colRefs).length > 0) {
-            setupFirebaseListeners(); 
-            checkLoginStatus(); 
-        } else {
-            throw new Error("Firebase is not initialized");
-        }
-    } catch (error) {
-        console.warn("ローカルモードで起動します", error); 
-        window.UI.showToast("ローカルモードで起動します。", "warning");
-        loadLocalData(); 
-        checkLoginStatus(); 
+        
+        // 💡 修正: 起動直後のリスナー登録を削除し、認証監視の中に移動しました
+        auth.onAuthChange(user => {
+            if (user) {
+                // ログイン済みの場合、リスナーがまだ設定されていなければ設定する
+                if (!isListenersSetup) {
+                    setupFirebaseListeners();
+                    isListenersSetup = true;
+                } else {
+                    if(playersLoaded) checkUserLink(user);
+                }
+            } else {
+                // 未ログインの場合は即座にログイン画面へ
+                checkUserLink(null);
+            }
+        });
+    } else {
+        window.UI.showToast("通信エラー: Firebaseが初期化できませんでした", "error");
+        showScreen('auth-screen');
     }
 }
 
 // ==========================================
-// 認証・セッション管理
+// 認証・ルーティング・紐付け
 // ==========================================
-function checkLoginStatus() {
-    const savedUser = auth.getCurrentUser();
-    if (savedUser) {
-        STATE.currentUser = savedUser;
-        window.UI.hideDisplay('login-screen'); 
-        window.UI.toggleDisplay('main-app', 'block');
-        window.UI.toggleDisplay('logout-btn', 'flex'); 
-        window.UI.toggleDisplay('notification-btn', 'flex'); 
+function showScreen(screenId) {
+    const screens = ['loading-screen', 'auth-screen', 'setup-screen', 'main-app'];
+    screens.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) {
+            if(id === screenId) {
+                el.classList.remove('hidden');
+                el.style.display = (id === 'main-app') ? 'block' : 'flex';
+            } else {
+                el.classList.add('hidden');
+                el.style.display = 'none';
+            }
+        }
+    });
+
+    if(screenId === 'main-app') {
+        window.UI.toggleDisplay('logout-btn', 'flex');
+        window.UI.toggleDisplay('notification-btn', 'flex');
         window.UI.toggleDisplay('header-streak-badge', 'flex');
+    } else {
+        window.UI.hideDisplay('logout-btn');
+        window.UI.hideDisplay('notification-btn');
+        window.UI.hideDisplay('header-streak-badge');
+    }
+}
+
+function checkUserLink(user) {
+    if (!user) {
+        STATE.currentUser = null;
+        showScreen('auth-screen');
+        return;
+    }
+
+    const linkedPlayer = STATE.players.find(p => p.uid === user.uid);
+    
+    if (linkedPlayer) {
+        STATE.currentUser = linkedPlayer.name;
+        STATE.currentUserCategory = linkedPlayer.category || 'BLUE';
         
         document.querySelectorAll('.display-player-name').forEach(el => el.textContent = STATE.currentUser);
-        const me = STATE.players.find(p => p.name === STATE.currentUser); 
-        if (me) STATE.currentUserCategory = me.category || 'BLUE';
+        showScreen('main-app');
         
-        ui.renderPlayerGoal(); 
-        ui.renderCalendar(handleDateSelect); 
-        ui.updateHeaderStreak();
-        
-        setTimeout(() => { 
-            const dInput = document.getElementById('date'); 
-            if (dInput) loadFormData(dInput.value); 
-        }, 100);
-        
-        const historyTab = document.getElementById('tab-history');
-        if(historyTab && historyTab.classList.contains('active')) { 
-            ui.renderPlayerHistory(); 
-            ui.renderTeamActivities(handleSendKudos); 
+        if (!mainAppInitialized) {
+            initMainAppUI();
+            mainAppInitialized = true;
+        } else {
+            updateGlobalNotifications();
+            ui.renderPlayerHistory();
         }
-        updateGlobalNotifications();
     } else {
-        window.UI.toggleDisplay('login-screen', 'flex'); 
-        window.UI.hideDisplay('main-app');
-        window.UI.hideDisplay('logout-btn'); 
-        window.UI.hideDisplay('notification-btn'); 
-        window.UI.hideDisplay('header-streak-badge'); 
-        window.UI.hideDisplay('streak-badge-container');
+        STATE.currentUser = null;
+        updateSetupSelect();
+        showScreen('setup-screen');
     }
 }
 
-function handleLogin() {
-    const selectEl = document.getElementById('login-player-select');
-    const selectedPlayer = selectEl ? selectEl.value : null;
-    if (auth.login(selectedPlayer)) {
-        checkLoginStatus();
+function updateSetupSelect() {
+    const select = document.getElementById('setup-player-select');
+    if(!select) return;
+    
+    select.innerHTML = '<option value="" disabled selected>自分の名前を選択 ▼</option>';
+    
+    const availablePlayers = STATE.players.filter(p => !p.uid);
+    availablePlayers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        select.appendChild(opt);
+    });
+    
+    if(availablePlayers.length === 0) {
+        select.innerHTML = '<option value="" disabled selected>紐付け可能な名前がありません（監督に確認してください）</option>';
     }
 }
 
-function handleLogout() { 
-    auth.logout(() => { checkLoginStatus(); }); 
+async function handleLinkPlayer() {
+    if(window.HAPTIC) window.HAPTIC.medium(); 
+    const select = document.getElementById('setup-player-select');
+    const playerName = select.value;
+    const user = auth.getCurrentUser();
+    
+    if(!playerName || !user) { 
+        window.UI.showToast("名前を選択してください。", "warning"); return; 
+    }
+    
+    const playerDoc = STATE.players.find(p => p.name === playerName);
+    if(!playerDoc) return;
+
+    window.UI.showConfirm(`「${playerName}」として登録しますか？<br><span style="font-size:12px; color:var(--color-danger);">※一度登録すると後から自分で変更できません。</span>`, async () => {
+        try {
+            await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
+            window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
+        } catch (error) {
+            window.UI.showToast("紐付けに失敗しました: " + error.message, "error");
+        }
+    });
+}
+
+function getAuthErrorMessage(error) {
+    const code = error.code;
+    if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') return "メールアドレスかパスワードが間違っています。";
+    if (code === 'auth/email-already-in-use') return "このメールアドレスは既に登録されています。";
+    if (code === 'auth/weak-password') return "パスワードは6文字以上にしてください。";
+    if (code === 'auth/invalid-email') return "メールアドレスの形式が正しくありません。";
+    return "認証エラーが発生しました: " + error.message;
+}
+
+async function handleEmailLogin() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const email = document.getElementById('auth-email').value.trim();
+    const pass = document.getElementById('auth-password').value;
+    if(!email || !pass) { window.UI.showToast('メールアドレスとパスワードを入力してください', 'warning'); return; }
+    
+    const res = await auth.loginWithEmail(email, pass);
+    if(!res.success) window.UI.showToast(getAuthErrorMessage(res.error), 'error');
+}
+
+async function handleEmailRegister() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const email = document.getElementById('auth-email').value.trim();
+    const pass = document.getElementById('auth-password').value;
+    if(!email || !pass) { window.UI.showToast('登録するメールアドレスとパスワードを入力してください', 'warning'); return; }
+    
+    const res = await auth.registerWithEmail(email, pass);
+    if(res.success) {
+        window.UI.showToast('アカウントを作成しました！', 'success');
+    } else {
+        window.UI.showToast(getAuthErrorMessage(res.error), 'error');
+    }
+}
+
+async function handleGoogleLogin() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const res = await auth.loginWithGoogle();
+    if(!res.success && res.error.code !== 'auth/popup-closed-by-user') {
+        window.UI.showToast(getAuthErrorMessage(res.error), 'error');
+    }
+}
+
+async function handleLogout() { 
+    window.UI.showConfirm("ログアウトしますか？", async () => { 
+        await auth.logoutUser();
+    }); 
 }
 
 // ==========================================
@@ -118,11 +221,11 @@ function setupFirebaseListeners() {
     if(window.colRefs.players) { 
         window.colRefs.players.onSnapshot(snapshot => { 
             STATE.players = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})); 
-            ui.updateLoginSelect(); 
-            if (STATE.currentUser) { 
-                const me = STATE.players.find(p => p.name === STATE.currentUser); 
-                if (me) STATE.currentUserCategory = me.category || 'BLUE'; 
-            } 
+            playersLoaded = true;
+            updateSetupSelect();
+            
+            const user = auth.getCurrentUser();
+            if (user) checkUserLink(user); 
         }); 
     }
     if(window.colRefs.settings) { 
@@ -146,7 +249,7 @@ function setupFirebaseListeners() {
             snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
             STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             const eduTab = document.getElementById('tab-education');
-            if(eduTab && eduTab.classList.contains('active')) ui.renderEducationList();
+            if(eduTab && eduTab.classList.contains('active')) window.renderEducationList();
         });
     }
     if(window.colRefs.logs) { 
@@ -183,17 +286,33 @@ function setupFirebaseListeners() {
     }
 }
 
+function initMainAppUI() {
+    ui.renderPlayerGoal(); 
+    ui.renderCalendar(handleDateSelect); 
+    ui.updateHeaderStreak();
+    
+    setTimeout(() => { 
+        const dInput = document.getElementById('date'); 
+        if (dInput) loadFormData(dInput.value); 
+    }, 100);
+    
+    updateGlobalNotifications();
+}
+
 function loadLocalData() {
     STATE.players = JSON.parse(localStorage.getItem('team_players') || '[]'); 
     ui.updateLoginSelect();
     STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]').sort((a, b) => new Date(b.date) - new Date(a.date));
     STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}'); 
     STATE.kudos = JSON.parse(localStorage.getItem('team_kudos') || '[]'); 
-    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}');
+    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}'); 
     
-    ui.renderCareTags(); ui.updateCountdownUI(); 
+    ui.renderCareTags(); 
+    ui.updateCountdownUI(); 
     if(STATE.currentUser) { 
-        ui.renderPlayerGoal(); ui.renderCalendar(handleDateSelect); ui.updateHeaderStreak(); 
+        ui.renderPlayerGoal(); 
+        ui.renderCalendar(handleDateSelect); 
+        ui.updateHeaderStreak(); 
     }
 }
 
@@ -396,7 +515,9 @@ function checkSprintRank(el) {
     }
 }
 
-// --- 🌐 コミュニケーション・通知系 ---
+// ==========================================
+// コミュニケーション・通知系
+// ==========================================
 async function handleSendKudos(target, stamp, logDate) {
     if(window.HAPTIC) window.HAPTIC.medium(); 
     const sender = STATE.currentUser; if (!sender) return;
@@ -408,11 +529,6 @@ async function handleSendKudos(target, stamp, logDate) {
             if (existingIndex > -1) { 
                 const docId = STATE.kudos[existingIndex].id; await window.colRefs.kudos.doc(docId).update({ stamp, isRead: false, createdAt: new Date().toISOString() }); 
             } else { await window.colRefs.kudos.add(kudoData); }
-        } else {
-            if (existingIndex > -1) { 
-                STATE.kudos[existingIndex].stamp = stamp; STATE.kudos[existingIndex].isRead = false; 
-            } else { STATE.kudos.push({ id: Date.now().toString(), ...kudoData }); }
-            localStorage.setItem('team_kudos', JSON.stringify(STATE.kudos));
         }
         if(window.UI) window.UI.showToast(`${target}さんにエールを送りました！`, 'success'); 
         ui.renderTeamActivities(handleSendKudos);
@@ -475,7 +591,6 @@ async function markKudosAsRead() {
     const unread = STATE.kudos.filter(k => k.target === STATE.currentUser && !k.isRead);
     unread.forEach(async k => {
         if(window.colRefs.kudos) { try { await window.colRefs.kudos.doc(k.id).update({ isRead: true }); } catch(e){} } 
-        else { k.isRead = true; localStorage.setItem('team_kudos', JSON.stringify(STATE.kudos)); }
     });
 }
 
@@ -698,7 +813,10 @@ function switchTab(tabId, btn) {
 // ==========================================
 // グローバル空間へのエクスポート (インラインイベント用)
 // ==========================================
-window.handleLogin = handleLogin;
+window.handleEmailLogin = handleEmailLogin;
+window.handleEmailRegister = handleEmailRegister;
+window.handleGoogleLogin = handleGoogleLogin;
+window.handleLinkPlayer = handleLinkPlayer;
 window.handleLogout = handleLogout;
 window.saveData = form.saveData;
 window.switchTab = switchTab;
@@ -709,7 +827,6 @@ window.handleDateSelect = handleDateSelect;
 window.calcFv = calcFv;
 window.handleSyncDeviceData = (name) => { if(window.UI) window.UI.showToast(`${name}の自動取得は開発準備中です。`, "warning"); };
 
-// 今回追加したグローバルバインディング
 window.filterEducation = ui.filterEducation;
 window.renderPlayerHistory = ui.renderPlayerHistory;
 window.changeMonth = (step) => ui.changeMonth(step, handleDateSelect);
@@ -722,6 +839,7 @@ window.toggleNotifications = toggleNotifications;
 window.refreshAdvicePostOnly = refreshAdvicePostOnly;
 window.markBroadcastAsRead = markBroadcastAsRead;
 window.renderNotifications = renderNotifications;
+window.renderEducationList = ui.renderEducationList;
 
 // 起動
 document.addEventListener('DOMContentLoaded', initApp);

@@ -8,11 +8,9 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ec4899">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AthleSense">
     <link rel="apple-touch-icon" href="icon-index.png">
-    <!-- faviconの404エラー対策 -->
     <link rel="icon" href="icon-index.png" type="image/png">
 
     <!-- Firebase / Chart.js / Confetti -->
@@ -58,42 +56,91 @@
         </div>
     </div>
 
-    <!-- ヘッダー -->
-    <header>
-        <div class="header-left">
-            <button id="theme-toggle" class="header-icon-btn" onclick="toggleTheme()">🌙</button>
-            <button id="logout-btn" class="header-icon-btn hidden" onclick="handleLogout()" style="background: rgba(220,38,38,0.8); border-color: #fca5a5;" title="ログアウト">🚪</button>
-        </div>
-        <div class="header-center">AthleSense</div>
-        <div class="header-right">
-            <div id="header-streak-badge" class="header-streak-badge">
-                <span id="header-streak-icon" style="margin-right: 4px;"></span>
-                <span id="header-streak-count"></span>
-            </div>
-            <div style="position: relative; display: flex;">
-                <button id="notification-btn" class="header-icon-btn hidden" onclick="openNotificationModal()">🔔</button>
-                <span id="notification-badge" class="hidden"></span>
-            </div>
-        </div>
-    </header>
+    <!-- 1. ローディング画面 (初期状態確認用) -->
+    <div id="loading-screen" class="container flex-center" style="min-height: 80vh; flex-direction: column; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999;">
+        <div style="font-size: 40px; margin-bottom: 16px; animation: popIn 1s infinite alternate;">🏃‍♂️</div>
+        <div style="font-size: 18px; font-weight: 900; color: var(--primary);">認証情報を確認中...</div>
+    </div>
 
-    <!-- ログイン画面 -->
-    <div id="login-screen" class="container flex-center" style="flex-direction: column; min-height: 80vh;">
-        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--primary);">
-            <h2 class="section-title flex-center" style="border: none; font-size: 26px;">👤 ログイン</h2>
-            <p style="font-size: 15px; color: var(--text-main); margin-bottom: 30px; font-weight: 600;">自分の名前を選択して、この端末を「自分専用」に設定してください。</p>
-            <select id="login-player-select" class="mb-5 text-center" style="border-color: var(--primary); font-size: 18px; padding: 20px;">
+    <!-- 2. 認証画面 (固定オーバーレイ＆はみ出し防止) -->
+    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); background-image: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, var(--secondary-light), transparent 60%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
+        
+        <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px; width: 100%; max-width: 380px;">
+            <div style="font-size: 56px; margin-bottom: 10px; text-shadow: 0 4px 12px rgba(236,72,153,0.3);">🏃‍♂️</div>
+            <h1 style="font-size: 36px; font-weight: 900; color: var(--primary); margin: 0; letter-spacing: -1px;">AthleSense</h1>
+            <p style="font-size: 14px; color: var(--text-main); font-weight: 700; margin-top: 8px;">コンディション管理を、もっとスマートに。</p>
+        </div>
+
+        <div class="glass-card animate-fade-in-up" style="width: 100%; max-width: 380px; padding: 32px 24px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-radius: 24px; animation-delay: 0.1s; box-sizing: border-box;">
+            
+            <div class="form-group mb-4 text-left">
+                <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">メールアドレス</label>
+                <input type="email" id="auth-email" placeholder="hello@example.com" style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0; box-sizing: border-box;">
+            </div>
+            
+            <div class="form-group mb-6 text-left">
+                <label style="font-weight: 800; color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">パスワード</label>
+                <input type="password" id="auth-password" placeholder="6文字以上の英数字" style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--input-bg); font-size: 16px; transition: all 0.2s; margin-bottom: 0; box-sizing: border-box;">
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <button class="btn-primary" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);" onclick="handleEmailLogin()">ログイン</button>
+                <button class="tag-btn" style="flex: 1; margin:0; padding: 16px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 800; box-shadow: none;" onclick="handleEmailRegister()">新規登録</button>
+            </div>
+            
+            <div style="display: flex; align-items: center; margin: 24px 0;">
+                <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
+                <div style="padding: 0 16px; font-size: 12px; color: var(--text-muted); font-weight: 700;">または</div>
+                <div style="flex: 1; height: 1px; background: var(--border-color);"></div>
+            </div>
+            
+            <button style="width: 100%; background: white; color: #374151; border: 1px solid #e5e7eb; padding: 14px; border-radius: 14px; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 0; box-sizing: border-box;" onclick="handleGoogleLogin()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:20px; margin-right:12px;"> Google で続ける
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. 名前紐付け画面 (初回のみ) -->
+    <div id="setup-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;">
+        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--secondary); box-sizing: border-box;">
+            <h2 class="section-title flex-center mt-0" style="border: none; font-size: 24px; color: var(--secondary);">👤 選手名の紐付け</h2>
+            <p style="font-size: 14px; color: var(--text-main); margin-bottom: 16px; font-weight: 600;">
+                認証が完了しました。<br>あなたの名前を選択し、アカウントと紐付けてください。
+            </p>
+            <div style="background: var(--color-danger-light); padding: 12px; border-radius: 8px; margin-bottom: 20px; box-sizing: border-box;">
+                <span style="color:var(--color-danger); font-size:12px; font-weight:900;">⚠️ 注意: この操作は一度だけ行います。後から自分で変更することはできません。間違えないように選択してください。</span>
+            </div>
+            <select id="setup-player-select" class="mb-5 text-center w-full" style="border-color: var(--secondary); font-size: 16px; padding: 16px; font-weight:900; box-sizing: border-box;">
                 <option value="" disabled selected>名前を読み込み中...</option>
             </select>
-            <button class="btn-primary" onclick="handleLogin()">ログインして開始 🚀</button>
+            <button class="btn-primary" style="background: var(--secondary); border-color: var(--secondary); margin-bottom:0; box-sizing: border-box; width: 100%;" onclick="handleLinkPlayer()">この名前で登録して開始 🚀</button>
         </div>
     </div>
 
     <!-- メインアプリ -->
     <div id="main-app" class="container hidden">
         
+        <!-- ヘッダー (メインアプリの中に移動し、非表示時は完全に消えるように修正) -->
+        <header>
+            <div class="header-left">
+                <button id="theme-toggle" class="header-icon-btn" onclick="toggleTheme()">🌙</button>
+                <button id="logout-btn" class="header-icon-btn hidden" onclick="handleLogout()" style="background: rgba(220,38,38,0.8); border-color: #fca5a5;" title="ログアウト">🚪</button>
+            </div>
+            <div class="header-center">AthleSense</div>
+            <div class="header-right">
+                <div id="header-streak-badge" class="header-streak-badge hidden">
+                    <span id="header-streak-icon" style="margin-right: 4px;"></span>
+                    <span id="header-streak-count"></span>
+                </div>
+                <div style="position: relative; display: flex;">
+                    <button id="notification-btn" class="header-icon-btn hidden" onclick="openNotificationModal()">🔔</button>
+                    <span id="notification-badge" class="hidden"></span>
+                </div>
+            </div>
+        </header>
+
         <!-- 天候ウィジェット -->
-        <div class="weather-widget animate-fade-in-up" id="weather-widget">
+        <div class="weather-widget animate-fade-in-up" id="weather-widget" style="margin-top: 60px;"> <!-- ヘッダーの高さ分のマージンを追加 -->
             <div class="flex-between" style="font-weight: 900; color: var(--weather-text); font-size: 18px;">
                 <span>📍 <span id="location-text">現在地を取得中...</span></span>
                 <span id="temp-text" style="font-size: 26px;">-- ℃</span>
@@ -258,7 +305,7 @@
                      
                      <div class="form-group danger-box">
                          <div class="form-label-flex"><label style="color: var(--warning-text); font-size:16px;">🔥 ケガ・痛みの詳細 (朝)</label></div>
-                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違軽く違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
+                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
                      </div>
                 </div>
 
@@ -519,7 +566,7 @@
         </div>
     </template>
 
-    <!-- アプリケーション本体 (ES Modules) -->
+    <!-- アプリケーション本体 -->
     <script type="module" src="js/player/main.js"></script>
 </body>
 </html>
