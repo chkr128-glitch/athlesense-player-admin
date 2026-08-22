@@ -1,1 +1,637 @@
+import { STATE } from './state.js';
+import * as logic from './logic.js';
+import * as ui from './ui.js';
+import * as charts from './charts.js';
 
+// ==========================================
+// 📌 アプリケーションの初期化
+// ==========================================
+async function initApp() {
+    setDefaultDates();
+    if (localStorage.getItem('theme') === 'dark') { 
+        document.body.classList.add('dark-mode'); 
+        document.getElementById('theme-toggle').innerHTML = '☀️';
+    }
+
+    try {
+        // グローバルに読み込まれた Firebase オブジェクトを使用
+        firebase.initializeApp(window.CONSTANTS.FIREBASE_CONFIG);
+        const db = firebase.firestore();
+        db.settings({ experimentalForceLongPolling: true });
+        await firebase.auth().signInAnonymously();
+        
+        window.colRefs = {
+            logs: db.collection('team_condition_logs'),
+            players: db.collection('team_players'),
+            goals: db.collection('team_goals'),
+            settings: db.collection('team_settings'),
+            edu: db.collection('team_education'),
+            broadcasts: db.collection('team_broadcasts')
+        };
+
+        document.getElementById('connection-status').textContent = 'クラウド同期中';
+        document.getElementById('connection-status').className = 'status-badge status-cloud';
+
+        setupListeners();
+    } catch (error) {
+        console.warn("Firebase Error", error);
+        document.getElementById('connection-status').textContent = 'ローカル';
+        document.getElementById('connection-status').className = 'status-badge status-local';
+        // UIモジュールはまだ初期化されていない可能性があるため、window.UIがない場合はフォールバック
+        if(window.UI && window.UI.showToast) window.UI.showToast("通信エラーのため、ローカルデータで起動します", "warning");
+        else alert("通信エラーのため、ローカルデータで起動します");
+        loadLocalData();
+    }
+}
+
+function setDefaultDates() {
+    const today = new Date().toISOString().split('T')[0];
+    const targetDateEl = document.getElementById('target-date');
+    if (targetDateEl) targetDateEl.value = today;
+    const ym = today.substring(0, 7);
+    const reportMonthEl = document.getElementById('report-month-select');
+    if (reportMonthEl) reportMonthEl.value = ym;
+}
+
+// ==========================================
+// 📌 Firebase イベントリスナー & ローカルデータフォールバック
+// ==========================================
+function setupListeners() {
+    window.colRefs.players.onSnapshot(snapshot => {
+        STATE.players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        STATE.players.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        ui.renderPlayersList(STATE.players, deletePlayer);
+        updateAdminUI();
+    });
+
+    window.colRefs.logs.onSnapshot(snapshot => {
+        STATE.logs = snapshot.docs.map(doc => doc.data());
+        STATE.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+        updateAdminUI();
+    });
+    
+    window.colRefs.broadcasts.onSnapshot(snapshot => {
+        STATE.broadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        STATE.broadcasts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const modal = document.getElementById('broadcast-list-modal');
+        if (modal && modal.style.display === 'flex') ui.renderBroadcastList(STATE.broadcasts, STATE.players, deleteBroadcast);
+    });
+    
+    window.colRefs.settings.doc('general').onSnapshot(doc => {
+        if(doc.exists) {
+            STATE.settings = doc.data();
+            STATE.careOptions = STATE.settings.careOptions || window.CONSTANTS.DEFAULT_CARES;
+            const viewCare = document.getElementById('view-careSettings');
+            if (viewCare && viewCare.style.display === 'block') ui.renderCareOptions(STATE.careOptions, deleteCareOption);
+            updateCountdownUI();
+        } else {
+            STATE.careOptions = window.CONSTANTS.DEFAULT_CARES;
+        }
+    });
+
+    window.colRefs.goals.onSnapshot(snapshot => {
+        STATE.goals = {}; 
+        snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
+        const viewGoals = document.getElementById('view-goals');
+        if (viewGoals && viewGoals.style.display === 'block') renderGoalsTable();
+    });
+    
+    window.colRefs.edu.onSnapshot(snapshot => {
+        STATE.education = []; 
+        snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
+        STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const viewEdu = document.getElementById('view-education');
+        if (viewEdu && viewEdu.style.display === 'block') renderEducationTable();
+    });
+}
+
+function loadLocalData() {
+    STATE.players = JSON.parse(localStorage.getItem('team_players') || '[]');
+    STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]');
+    STATE.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}');
+    STATE.broadcasts = JSON.parse(localStorage.getItem('team_broadcasts') || '[]');
+    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}');
+    STATE.education = JSON.parse(localStorage.getItem('team_education') || '[]');
+    
+    ui.renderPlayersList(STATE.players, deletePlayer); 
+    updateAdminUI(); 
+    updateCountdownUI();
+}
+
+function updateCountdownUI() {
+    const banner = document.getElementById('countdown-banner');
+    if (!banner) return;
+    if (!STATE.settings || !STATE.settings.targetEventDate) {
+        banner.style.display = 'none'; return;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const target = new Date(STATE.settings.targetEventDate + 'T00:00:00'); target.setHours(0,0,0,0);
+    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 0) {
+        banner.style.display = 'flex'; banner.style.background = '';
+        banner.innerHTML = `🏆 ${STATE.settings.targetEventName || '大会'}まで あと <span class="days">${diffDays}</span> 日！`;
+    } else if (diffDays === 0) {
+        banner.style.display = 'flex'; banner.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        banner.innerHTML = `🔥 本日は ${STATE.settings.targetEventName || '大会'} 当日です！健闘を祈ります！`;
+    } else {
+        banner.style.display = 'none'; 
+    }
+}
+
+// ==========================================
+// 📌 UI 更新統合管理
+// ==========================================
+function updateAdminUI() {
+    ui.updatePeriodFilterOptions(STATE.logs); 
+    ui.updatePlayerSelect(STATE.players); 
+    filterAndRenderTable(); 
+    updateTodayView();
+}
+
+function filterAndRenderTable() {
+    const periodFilter = document.getElementById('period-filter') ? document.getElementById('period-filter').value : 'all';
+    const searchInput = document.getElementById('search-input') ? document.getElementById('search-input').value.toLowerCase() : '';
+    
+    STATE.filteredLogs = logic.filterLogs(STATE.logs, periodFilter, searchInput);
+    
+    ui.renderTableData(STATE.filteredLogs, 'history-table-body', true, STATE.players, deleteLog, openCommentModal, openDetailModal);
+    
+    // 現在開いているビューに応じて更新
+    const viewIndividual = document.getElementById('view-individual'); 
+    if (viewIndividual && viewIndividual.style.display === 'block') updateCharts();
+    
+    const viewTeamTrend = document.getElementById('view-teamTrend'); 
+    if (viewTeamTrend && viewTeamTrend.style.display === 'block') charts.drawTeamTrendChart(STATE.filteredLogs);
+    
+    const viewHeatmap = document.getElementById('view-heatmap'); 
+    if (viewHeatmap && viewHeatmap.style.display === 'block') ui.updateHeatmap(STATE.filteredLogs);
+    
+    const viewSprint = document.getElementById('view-sprint'); 
+    if (viewSprint && viewSprint.style.display === 'block') ui.updateSprintRanking(STATE.filteredLogs, STATE.players);
+    
+    const viewFv = document.getElementById('view-fv'); 
+    if (viewFv && viewFv.style.display === 'block') ui.updateFvGrouping(STATE.filteredLogs);
+}
+
+function updateTodayView() {
+    const targetDateEl = document.getElementById('target-date');
+    if (!targetDateEl) return;
+    const targetDateStr = targetDateEl.value;
+    const todayLogs = STATE.logs.filter(log => log.date === targetDateStr);
+    const expectedPlayers = STATE.players.map(p => p.name);
+    
+    ui.updateTodayDashboard(targetDateStr, todayLogs, expectedPlayers, STATE.logs);
+    ui.renderTableData(todayLogs, 'today-table-body', false, STATE.players, deleteLog, openCommentModal, openDetailModal);
+}
+
+function updateCharts() {
+    const selectEl = document.getElementById('chart-player-select');
+    if(selectEl) {
+        charts.updateIndividualAnalysis(selectEl.value, STATE.filteredLogs, STATE.logs);
+    }
+}
+
+// ==========================================
+// 📌 データ操作 (CRUD)
+// ==========================================
+
+// --- ケア項目 ---
+async function addCareOption() {
+    const val = document.getElementById('new-care-input').value.trim();
+    if(!val) return;
+    const newOptions = [...STATE.careOptions, val];
+    if(window.colRefs && window.colRefs.settings) await window.colRefs.settings.doc('general').set({ careOptions: newOptions }, { merge: true });
+    document.getElementById('new-care-input').value = '';
+}
+
+function deleteCareOption(index) {
+    if(window.UI) {
+        window.UI.showConfirm("削除しますか？", async () => {
+            const newOptions = [...STATE.careOptions]; 
+            newOptions.splice(index, 1);
+            if(window.colRefs && window.colRefs.settings) await window.colRefs.settings.doc('general').set({ careOptions: newOptions }, { merge: true });
+            window.UI.showToast("削除しました", "success");
+        });
+    }
+}
+
+// --- 選手管理 ---
+function addPlayer() {
+    const input = document.getElementById('new-player-name'); 
+    const catInput = document.getElementById('new-player-category');
+    const name = input.value.trim(); 
+    if (!name) return;
+    if (STATE.players.some(p => p.name === name)) { 
+        if(window.UI) window.UI.showToast('登録済みです', 'warning'); 
+        return; 
+    }
+    const data = { name: name, category: catInput.value, createdAt: new Date().toISOString() };
+    if (window.colRefs && window.colRefs.players) window.colRefs.players.add(data);
+    input.value = ''; 
+    if(window.UI) window.UI.showToast("選手を追加しました", "success");
+}
+
+function deletePlayer(id) { 
+    if(window.UI) {
+        window.UI.showConfirm("削除しますか？", () => { 
+            if (window.colRefs && window.colRefs.players) window.colRefs.players.doc(id).delete(); 
+            window.UI.showToast("削除しました", "success"); 
+        }); 
+    }
+}
+
+// --- 目標管理 ---
+function renderGoalsTable() {
+    const tbody = document.getElementById('goals-table-body'); 
+    if (!tbody) return; 
+    tbody.innerHTML = '';
+    if (STATE.players.length === 0) { 
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; font-weight:800; color:var(--text-muted); padding:30px;">選手が登録されていません。</td></tr>'; 
+        return; 
+    }
+
+    STATE.players.forEach(player => {
+        const tr = document.createElement('tr');
+        const catBadge = ui.getCategoryBadge(player.category || 'BLUE');
+        const goalData = STATE.goals[player.name] || {};
+        const seasonGoal = goalData.seasonGoal || '<span style="color:var(--text-muted);">未設定</span>';
+        const monthGoal = goalData.monthGoal || '<span style="color:var(--text-muted);">未設定</span>';
+
+        tr.innerHTML = `
+            <td style="font-weight:900; font-size:15px; display:flex; align-items:center;">${catBadge}${player.name}</td>
+            <td><div class="flex-between"><div style="white-space:pre-wrap; font-size:14px; font-weight:800; color:var(--secondary);">${seasonGoal}</div><button onclick="editGoalAdmin('${player.name}', 'season')" style="background:none; border:none; color:var(--primary); cursor:pointer; font-size:18px; padding:0; transition:transform 0.2s;">✎</button></div></td>
+            <td><div class="flex-between"><div style="white-space:pre-wrap; font-size:14px; font-weight:800; color:var(--primary);">${monthGoal}</div><button onclick="editGoalAdmin('${player.name}', 'month')" style="background:none; border:none; color:var(--secondary); cursor:pointer; font-size:18px; padding:0; transition:transform 0.2s;">✎</button></div></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function editGoalAdmin(playerName, type) {
+    const goalData = STATE.goals[playerName] || {};
+    const currentGoal = type === 'season' ? (goalData.seasonGoal || "") : (goalData.monthGoal || "");
+    const title = type === 'season' ? "今シーズンの目標" : "今月の目標・テーマ";
+    
+    if(window.UI) {
+        window.UI.showPrompt(`【${playerName}】選手の ${title} を設定：`, "", currentGoal, async (newGoal) => {
+            const updateData = { updatedAt: new Date().toISOString() };
+            if (type === 'season') updateData.seasonGoal = newGoal; else updateData.monthGoal = newGoal;
+            try {
+                if (window.colRefs && window.colRefs.goals) await window.colRefs.goals.doc(playerName).set(updateData, { merge: true });
+                window.UI.showToast("目標を更新しました", "success");
+            } catch (e) { 
+                window.UI.showToast("保存に失敗しました。", "error"); 
+            }
+        });
+    }
+}
+
+async function saveTeamSettings() {
+    const name = document.getElementById('target-event-name').value.trim();
+    const dateStr = document.getElementById('target-event-date').value;
+    const updateData = { targetEventName: name, targetEventDate: dateStr, updatedAt: new Date().toISOString() };
+    try {
+        if (window.colRefs && window.colRefs.settings) await window.colRefs.settings.doc('general').set(updateData, { merge: true });
+        if(window.UI) window.UI.showToast('チームの目標大会を設定しました！', "success");
+    } catch(e) { 
+        if(window.UI) window.UI.showToast('保存に失敗しました。', "error"); 
+    }
+}
+
+// --- 教育コンテンツ ---
+async function addEducation() {
+    const title = document.getElementById('edu-title').value.trim(); 
+    const category = document.getElementById('edu-category').value;
+    const url = document.getElementById('edu-url').value.trim(); 
+    const desc = document.getElementById('edu-desc').value.trim();
+    
+    if (!title) { 
+        if(window.UI) window.UI.showToast('タイトルを入力してください。', "warning"); 
+        return; 
+    }
+    const data = { title: title, category: category, url: url, description: desc, createdAt: new Date().toISOString() };
+    try {
+        if (window.colRefs && window.colRefs.edu) await window.colRefs.edu.add(data);
+        document.getElementById('edu-title').value = ''; 
+        document.getElementById('edu-url').value = ''; 
+        document.getElementById('edu-desc').value = '';
+        if(window.UI) window.UI.showToast('コンテンツを追加しました！', "success");
+    } catch (e) { 
+        if(window.UI) window.UI.showToast('追加に失敗しました。', "error"); 
+    }
+}
+
+function renderEducationTable() {
+    const tbody = document.getElementById('education-table-body'); 
+    if(!tbody) return; 
+    tbody.innerHTML = '';
+    
+    if (STATE.education.length === 0) { 
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; font-weight:800; color:var(--text-muted); padding:30px;">コンテンツがありません。</td></tr>'; 
+        return; 
+    }
+    STATE.education.forEach(item => {
+        const tr = document.createElement('tr');
+        const ytLink = item.url ? `<a href="${item.url}" target="_blank" style="color:var(--primary); font-size:13px; display:inline-block; margin-top:8px; font-weight:900;">🔗 リンクを開く</a>` : '';
+        tr.innerHTML = `
+            <td><span class="status-badge" style="background:var(--secondary-alpha); color:var(--secondary); margin:0;">${item.category}</span></td>
+            <td><strong style="color:var(--secondary); font-size:15px;">${item.title}</strong><br><span style="font-size:13px; color:var(--text-main); white-space:pre-wrap; font-weight:600; display:block; margin-top:4px;">${item.description}</span>${ytLink}</td>
+            <td style="text-align:center;"><button class="btn btn-danger" style="padding: 8px 12px; font-size:12px; box-shadow:none;" onclick="deleteEducation('${item.id}')">削除</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function deleteEducation(id) {
+    if(window.UI) {
+        window.UI.showConfirm("このコンテンツを削除しますか？", async () => {
+            try { 
+                if (window.colRefs && window.colRefs.edu) await window.colRefs.edu.doc(id).delete(); 
+                window.UI.showToast('削除しました', 'success'); 
+            } catch (e) { 
+                window.UI.showToast('削除に失敗しました。', 'error'); 
+            }
+        });
+    }
+}
+
+// --- ログ削除・リセット ---
+function deleteLog(playerName, date) {
+    if(window.UI) {
+        window.UI.showConfirm(`本当に削除しますか？`, async () => {
+            const docId = `${playerName}_${date}`;
+            if (window.colRefs && window.colRefs.logs) { 
+                await window.colRefs.logs.doc(docId).delete(); 
+                window.UI.showToast('削除しました', 'success'); 
+            }
+        });
+    }
+}
+
+function clearAllData() {
+    if(window.UI) {
+        window.UI.showConfirm("全データを削除しますか？<br><span style='font-size:13px; color:var(--color-danger);'>※この操作は取り消せません。</span>", async () => {
+            if (window.colRefs && window.colRefs.logs) {
+                const snapshot = await window.colRefs.logs.get(); 
+                snapshot.docs.forEach(doc => doc.ref.delete()); 
+                window.UI.showToast('全データを削除しました', 'success');
+            }
+        });
+    }
+}
+
+// ==========================================
+// 📌 ブロードキャスト & 個別コメント
+// ==========================================
+function openBroadcastModal() { document.getElementById('broadcast-modal').style.display = 'flex'; }
+function closeBroadcastModal() { document.getElementById('broadcast-modal').style.display = 'none'; }
+
+function sendBroadcast() {
+    const title = document.getElementById('bc-title').value.trim();
+    const message = document.getElementById('bc-message').value.trim();
+    const level = document.getElementById('bc-level').value;
+    const target = document.getElementById('bc-target').value;
+    
+    if(!title || !message) { 
+        if(window.UI) window.UI.showToast('タイトルとメッセージを入力してください', 'warning'); 
+        return; 
+    }
+    
+    if(window.UI) {
+        window.UI.showConfirm(`この内容で【${target === 'ALL' ? '全員' : target}】へ送信しますか？`, async () => {
+            const data = { title, message, level, target, readBy: [], createdAt: new Date().toISOString() };
+            try {
+                if(window.colRefs && window.colRefs.broadcasts) { 
+                    await window.colRefs.broadcasts.add(data); 
+                } else {
+                    STATE.broadcasts.push({id: Date.now().toString(), ...data});
+                    localStorage.setItem('team_broadcasts', JSON.stringify(STATE.broadcasts));
+                }
+                window.UI.showToast('🚀 お知らせを送信しました！', 'success');
+                document.getElementById('bc-title').value = ''; 
+                document.getElementById('bc-message').value = '';
+                closeBroadcastModal();
+            } catch(e) { 
+                window.UI.showToast('送信失敗: ' + e.message, 'error'); 
+            }
+        });
+    }
+}
+
+function openBroadcastListModal() { 
+    ui.renderBroadcastList(STATE.broadcasts, STATE.players, deleteBroadcast); 
+    document.getElementById('broadcast-list-modal').style.display = 'flex'; 
+}
+function closeBroadcastListModal() { document.getElementById('broadcast-list-modal').style.display = 'none'; }
+
+function deleteBroadcast(id) {
+    if(window.UI) {
+        window.UI.showConfirm("このお知らせを削除しますか？<br><span style='font-size:13px; font-weight:600;'>（選手の画面からも消えます）</span>", async () => {
+            if(window.colRefs && window.colRefs.broadcasts) {
+                await window.colRefs.broadcasts.doc(id).delete();
+            } else {
+                STATE.broadcasts = STATE.broadcasts.filter(b => b.id !== id);
+                localStorage.setItem('team_broadcasts', JSON.stringify(STATE.broadcasts));
+                ui.renderBroadcastList(STATE.broadcasts, STATE.players, deleteBroadcast);
+            }
+            window.UI.showToast("削除しました", "success");
+        });
+    }
+}
+
+let currentCommentTarget = null;
+
+function openCommentModal(playerName, date) {
+    currentCommentTarget = { playerName, date };
+    const log = STATE.logs.find(l => l.playerName === playerName && l.date === date);
+    
+    document.getElementById('cm-player').textContent = playerName;
+    document.getElementById('cm-date').textContent = `(${date.split('-').slice(1).join('/')})`;
+    document.getElementById('cm-good').textContent = log.good || '未入力';
+    document.getElementById('cm-bad').textContent = log.bad || '未入力';
+    
+    document.querySelectorAll('.stamp-btn').forEach(btn => btn.classList.remove('selected'));
+    document.getElementById('cm-text').value = '';
+    
+    if(log.coachComment) {
+        document.getElementById('cm-text').value = log.coachComment.text || '';
+        if(log.coachComment.stamp) {
+            const stampBtn = Array.from(document.querySelectorAll('.stamp-btn')).find(b => b.textContent === log.coachComment.stamp);
+            if(stampBtn) stampBtn.classList.add('selected');
+        }
+    }
+    document.getElementById('comment-modal').style.display = 'flex';
+}
+
+function closeCommentModal() {
+    document.getElementById('comment-modal').style.display = 'none'; 
+    currentCommentTarget = null;
+}
+
+function selectStamp(btn) {
+    document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+}
+
+async function saveCoachComment() {
+    if(!currentCommentTarget) return;
+    const { playerName, date } = currentCommentTarget;
+    const selectedStampBtn = document.querySelector('.stamp-btn.selected');
+    const stamp = selectedStampBtn ? selectedStampBtn.textContent : '';
+    const text = document.getElementById('cm-text').value.trim();
+    
+    if(!stamp && !text) { 
+        if(window.UI) window.UI.showToast('スタンプかメッセージのどちらかを入力してください', 'warning'); 
+        return; 
+    }
+    
+    const docId = `${playerName}_${date}`;
+    const coachComment = { stamp, text, updatedAt: new Date().toISOString() };
+    
+    try {
+        if(window.colRefs && window.colRefs.logs) {
+            await window.colRefs.logs.doc(docId).set({ coachComment, playerReadComment: false }, { merge: true });
+        } else {
+            const idx = STATE.logs.findIndex(l => l.playerName === playerName && l.date === date);
+            if(idx > -1) {
+                STATE.logs[idx].coachComment = coachComment; 
+                STATE.logs[idx].playerReadComment = false;
+                localStorage.setItem('team_condition_logs', JSON.stringify(STATE.logs)); 
+                updateAdminUI();
+            }
+        }
+        if(window.UI) window.UI.showToast("フィードバックを送信しました！", "success"); 
+        closeCommentModal();
+    } catch(e) { 
+        if(window.UI) window.UI.showToast('保存失敗: ' + e.message, 'error'); 
+    }
+}
+
+function openDetailModal(playerName, date) {
+    const log = STATE.logs.find(l => l.playerName === playerName && l.date === date);
+    if (!log) return;
+    document.getElementById('detail-menu').textContent = log.menu || '未入力';
+    document.getElementById('detail-good').textContent = log.good || '未入力';
+    document.getElementById('detail-bad').textContent = log.bad || '未入力';
+    document.getElementById('detail-modal').style.display = 'flex';
+}
+function closeDetailModal() {
+    document.getElementById('detail-modal').style.display = 'none';
+}
+
+// ==========================================
+// 📌 エクスポート・その他の機能
+// ==========================================
+function downloadCSV() {
+    const logs = STATE.filteredLogs || [];
+    if (logs.length === 0) { 
+        if(window.UI) window.UI.showToast("ダウンロードするデータがありません。", "warning"); 
+        return; 
+    }
+    let csvContent = '\uFEFF'; 
+    const headers = ['日付', '選手名', 'IRS(朝)', 'IRS(夜)', '疲労度', 'ストレス', 'TrainingLoad', 'スプリント1_距離', 'スプリント1_タイム', 'スプリント2_距離', 'スプリント2_タイム', 'スプリント3_距離', 'スプリント3_タイム', 'RSI', 'F-v診断', '朝の筋肉痛・張り', '夜の筋肉痛・張り', '体重(kg)', '心拍数', '歩数', '睡眠時間', '睡眠の質', '朝のケガ詳細', '夜のケガ詳細', 'メニュー', 'できたこと', '課題', '実施したケア', 'コーチコメント'];
+    csvContent += headers.join(',') + '\n';
+
+    const exportLogs = [...logs].reverse();
+    exportLogs.forEach(log => {
+        let sLogs = log.sprintLogs ? [...log.sprintLogs] : [];
+        if (log.sprintDistance && log.sprintDistance !== '未計測' && log.sprintTime) {
+            sLogs.push({ distance: log.sprintDistance, time: log.sprintTime });
+        }
+        const s1 = sLogs[0] || { distance: '', time: '' }; 
+        const s2 = sLogs[1] || { distance: '', time: '' }; 
+        const s3 = sLogs[2] || { distance: '', time: '' };
+        const coachCommentText = log.coachComment ? `${log.coachComment.stamp} ${log.coachComment.text}` : '';
+
+        const W = window.CONSTANTS ? window.CONSTANTS.THRESHOLDS.IRS_WEIGHTS : null;
+        const irsPreVal = log.irsPre || logic.calcLogIrs(log, 'pre', W);
+        const irsPostVal = log.irsPost || logic.calcLogIrs(log, 'post', W);
+
+        let safeCare = String(log.care || '').replace(/null/g, '').split('/').map(s => s.trim()).filter(s => s !== '').join(' / ');
+
+        const row = [
+            log.date, log.playerName, irsPreVal, irsPostVal, log.fatigue, log.stress, log.trainingLoad, 
+            s1.distance, s1.time, s2.distance, s2.time, s3.distance, s3.time,
+            log.rsi, log.fvResult, log.soreness, log.sorenessPost, log.weight, log.heartRate, log.steps, log.sleep, log.sleepQuality, 
+            log.injuryPre || '', log.injury || '', log.menu, log.good, log.bad, safeCare, coachCommentText
+        ].map(item => {
+            let text = String(item || '').replace(/"/g, '""').replace(/\n/g, ' '); 
+            text = text.replace(/<[^>]*>?/gm, ''); 
+            return `"${text}"`;
+        });
+        csvContent += row.join(',') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob); 
+    link.download = `AthleSense_Logs.csv`;
+    link.style.display = "none"; 
+    document.body.appendChild(link); 
+    link.click(); 
+    document.body.removeChild(link);
+}
+
+function generateMonthlyReport() {
+    if(window.UI) window.UI.showToast("PDFレポート作成機能は現在準備中です。今後のアップデートをお待ちください！", "info");
+}
+
+function toggleTheme() {
+    const body = document.body; body.classList.toggle('dark-mode');
+    const isDark = body.classList.contains('dark-mode');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    document.getElementById('theme-toggle').innerHTML = isDark ? '☀️' : '🌙';
+    
+    if(STATE.charts.teamTrend) STATE.charts.teamTrend.update();
+    if(STATE.charts.load) STATE.charts.load.update();
+    if(STATE.charts.rsi) STATE.charts.rsi.update();
+}
+
+// ==========================================
+// グローバルスコープへのバインディング
+// ==========================================
+window.toggleTheme = toggleTheme;
+window.switchTab = ui.switchTab;
+window.openHistoryView = (viewId) => ui.openHistoryView(viewId, (id) => {
+    // view展開時のコールバック
+    if(id === 'individual') updateCharts();
+    if(id === 'goals') renderGoalsTable();
+    if(id === 'education') renderEducationTable();
+    if(id === 'teamTrend') charts.drawTeamTrendChart(STATE.filteredLogs);
+    if(id === 'careSettings') ui.renderCareOptions(STATE.careOptions, deleteCareOption);
+    if(id === 'heatmap') ui.updateHeatmap(STATE.filteredLogs);
+    if(id === 'sprint') ui.updateSprintRanking(STATE.filteredLogs, STATE.players);
+    if(id === 'fv') ui.updateFvGrouping(STATE.filteredLogs);
+});
+window.backToHistoryMenu = ui.backToHistoryMenu;
+
+window.updateTodayView = updateTodayView;
+window.filterAndRenderTable = filterAndRenderTable;
+window.updateCharts = updateCharts;
+window.updateSprintRanking = () => ui.updateSprintRanking(STATE.filteredLogs, STATE.players);
+
+window.addCareOption = addCareOption;
+window.addPlayer = addPlayer;
+window.editGoalAdmin = editGoalAdmin;
+window.saveTeamSettings = saveTeamSettings;
+window.addEducation = addEducation;
+window.deleteEducation = deleteEducation;
+
+window.openBroadcastModal = openBroadcastModal;
+window.closeBroadcastModal = closeBroadcastModal;
+window.sendBroadcast = sendBroadcast;
+window.openBroadcastListModal = openBroadcastListModal;
+window.closeBroadcastListModal = closeBroadcastListModal;
+
+window.closeCommentModal = closeCommentModal;
+window.selectStamp = selectStamp;
+window.saveCoachComment = saveCoachComment;
+
+window.closeDetailModal = closeDetailModal;
+window.clearAllData = clearAllData;
+window.downloadCSV = downloadCSV;
+window.generateMonthlyReport = generateMonthlyReport;
+
+// 初期化実行
+document.addEventListener('DOMContentLoaded', initApp);
