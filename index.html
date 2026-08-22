@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AthleSense</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ec4899">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AthleSense">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <!-- Firebase / Chart.js / Confetti -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- 分割したCSSの読み込み -->
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/index.css">
+</head>
+<body>
+
+    <!-- 天候オーバーレイ -->
+    <div id="weather-overlay" class="weather-overlay"></div>
+    
+    <!-- トースト通知 -->
+    <div id="toast-container" style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none;"></div>
+
+    <!-- モーダル各種 -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="glass-card modal-content-box" style="max-width: 320px; text-align: center; padding: 30px;">
+            <div style="font-size: 40px; margin-bottom: 15px; animation: popIn 0.5s;">🤔</div>
+            <h3 id="confirm-message" style="margin-top: 0; margin-bottom: 25px; font-size: 18px;"></h3>
+            <div class="flex-row-gap">
+                <button id="confirm-cancel-btn" class="tag-btn" style="flex: 1; box-shadow: none;">キャンセル</button>
+                <button id="confirm-ok-btn" class="btn-primary" style="flex: 1; margin-bottom: 0;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="prompt-modal" class="modal-overlay">
+        <div class="glass-card modal-content-box" style="max-width: 400px; padding: 30px;">
+            <h3 id="prompt-title" class="section-title mt-0" style="border: none; padding-bottom: 0;"></h3>
+            <p id="prompt-desc" style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; mt-0"></p>
+            <textarea id="prompt-input" rows="4" class="mb-4"></textarea>
+            <div class="flex-row-gap justify-end">
+                <button id="prompt-cancel-btn" class="tag-btn" style="flex: 1; box-shadow: none;">キャンセル</button>
+                <button id="prompt-ok-btn" class="btn-primary" style="flex: 1; margin-bottom: 0;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ヘッダー -->
+    <header>
+        <div class="header-left">
+            <button id="theme-toggle" class="header-icon-btn" onclick="toggleTheme()">🌙</button>
+            <button id="logout-btn" class="header-icon-btn hidden" onclick="handleLogout()" style="background: rgba(220,38,38,0.8); border-color: #fca5a5;" title="ログアウト">🚪</button>
+        </div>
+        <div class="header-center">AthleSense</div>
+        <div class="header-right">
+            <div id="header-streak-badge" class="header-streak-badge">
+                <span id="header-streak-icon" style="margin-right: 4px;"></span>
+                <span id="header-streak-count"></span>
+            </div>
+            <div style="position: relative; display: flex;">
+                <button id="notification-btn" class="header-icon-btn hidden" onclick="openNotificationModal()">🔔</button>
+                <span id="notification-badge" class="hidden"></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ログイン画面 -->
+    <div id="login-screen" class="container flex-center" style="flex-direction: column; min-height: 80vh;">
+        <div class="glass-card w-full text-center" style="max-width: 400px; border: 2px solid var(--primary);">
+            <h2 class="section-title flex-center" style="border: none; font-size: 26px;">👤 ログイン</h2>
+            <p style="font-size: 15px; color: var(--text-main); margin-bottom: 30px; font-weight: 600;">自分の名前を選択して、この端末を「自分専用」に設定してください。</p>
+            <select id="login-player-select" class="mb-5 text-center" style="border-color: var(--primary); font-size: 18px; padding: 20px;">
+                <option value="" disabled selected>名前を読み込み中...</option>
+            </select>
+            <button class="btn-primary" onclick="handleLogin()">ログインして開始 🚀</button>
+        </div>
+    </div>
+
+    <!-- メインアプリ -->
+    <div id="main-app" class="container hidden">
+        
+        <!-- 天候ウィジェット -->
+        <div class="weather-widget animate-fade-in-up" id="weather-widget">
+            <div class="flex-between" style="font-weight: 900; color: var(--weather-text); font-size: 18px;">
+                <span>📍 <span id="location-text">現在地を取得中...</span></span>
+                <span id="temp-text" style="font-size: 26px;">-- ℃</span>
+            </div>
+            <div class="weather-advice-box" id="weather-advice">
+                気象データに基づくコンディショニング提案を読み込んでいます...
+            </div>
+        </div>
+
+        <!-- カウントダウン & ブロードキャスト -->
+        <div id="countdown-banner" class="countdown-banner animate-pop-in"></div>
+
+        <div id="broadcast-banner" class="broadcast-banner">
+            <div class="flex-between mb-2" style="align-items: flex-start;">
+                <div>
+                    <span id="broadcast-level-badge" class="b-badge">お知らせ</span>
+                    <h4 id="broadcast-title" class="mt-0 mb-0" style="font-size: 18px; color: var(--text-main); font-weight: 900;"></h4>
+                </div>
+            </div>
+            <p id="broadcast-message" class="mt-0 mb-4" style="font-size: 15px; color: var(--text-main); white-space: pre-wrap; font-weight: 600;"></p>
+            <button id="broadcast-confirm-btn" class="btn-primary" style="padding: 14px; margin-bottom: 0; background: var(--good-text); box-shadow: none;">✅ 確認しました</button>
+        </div>
+
+        <!-- ストリークバッジ -->
+        <div class="streak-badge animate-fade-in-up" id="streak-badge-container" style="display: none;">
+            <span>✨ 連続入力ストリーク</span>
+            <span id="streak-text" style="font-size: 18px; color: var(--primary); font-weight: 900;">計算中...</span>
+        </div>
+
+        <!-- カレンダー -->
+        <div class="calendar-container animate-fade-in-up">
+            <div class="calendar-header">
+                <button onclick="changeMonth(-1)">◀ 先月</button>
+                <div class="text-center">
+                    <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px; font-weight:bold;">👤 <span class="display-player-name" style="font-weight:900; color:var(--primary);"></span> の記録</div>
+                    <h3 id="calendar-month-year">2026年 7月</h3>
+                </div>
+                <button onclick="changeMonth(1)">来月 ▶</button>
+            </div>
+            
+            <div class="calendar-grid">
+                <div class="calendar-day-name">日</div><div class="calendar-day-name">月</div><div class="calendar-day-name">火</div><div class="calendar-day-name">水</div>
+                <div class="calendar-day-name">木</div><div class="calendar-day-name">金</div><div class="calendar-day-name">土</div>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+            
+            <div class="text-center mt-4" style="font-size:13px; color:var(--text-muted); font-weight:bold;">
+                ※日付をタップしてデータを振り返り・修正<br>
+                <div class="flex-center mt-2" style="gap:16px;">
+                    <span><span style="display:inline-block;width:14px;height:14px;background:rgba(16,185,129,0.2);border:2px solid #10b981;border-radius:4px;vertical-align:-2px;"></span> 良好</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:rgba(245,158,11,0.2);border:2px solid #f59e0b;border-radius:4px;vertical-align:-2px;"></span> 注意</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:rgba(239,68,68,0.2);border:2px solid #ef4444;border-radius:4px;vertical-align:-2px;"></span> 疲労</span>
+                </div>
+                <div class="flex-center mt-2" style="gap:16px;">
+                    <span class="flex-center" style="gap:6px;"><div class="flex-center" style="font-size:12px; background:#fef2f2; border:1px solid var(--warning-text); border-radius:50%; width:20px; height:20px;">⚠️</div> ケガ報告</span>
+                    <span class="flex-center" style="gap:6px;"><div class="flex-center" style="font-size:12px; background:white; border:1px solid var(--primary); border-radius:50%; width:20px; height:20px;">💬</div> コーチコメント</span>
+                </div>
+            </div>
+            <input type="hidden" id="date">
+        </div>
+
+        <!-- 目標カード -->
+        <div class="goal-card animate-fade-in-up" id="goal-container" style="display: none;">
+            <div class="mb-4">
+                <div class="flex-between" style="border-bottom: 2px solid var(--secondary); padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 class="mt-0 mb-0" style="color: var(--secondary); font-size: 18px; font-weight:900;">🎯 今シーズンの目標</h3>
+                    <button class="goal-edit-btn" onclick="handleEditGoal('season')">✎ 編集</button>
+                </div>
+                <div id="season-goal-text" style="font-weight: 800; color: var(--text-main); font-size: 18px;">目標を設定してください</div>
+            </div>
+            <div style="border-top: 2px dashed rgba(249, 115, 22, 0.4); padding-top: 24px;">
+                <div class="flex-between" style="border-bottom: 2px solid var(--secondary); padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 class="mt-0 mb-0" style="color: var(--secondary); font-size: 18px; font-weight:900;">🗓️ 今月のテーマ</h3>
+                    <button class="goal-edit-btn" onclick="handleEditGoal('month')">✎ 編集</button>
+                </div>
+                <div id="month-goal-text" style="font-weight: 800; color: var(--text-main); font-size: 18px;">目標を設定してください</div>
+            </div>
+        </div>
+
+        <!-- タブナビゲーション -->
+        <div class="tab-nav animate-fade-in-up">
+            <button class="tab-btn active" onclick="switchTab('pre', this)">🌅 朝</button>
+            <button class="tab-btn" onclick="switchTab('post', this)">🌙 夜</button>
+            <button class="tab-btn" onclick="switchTab('education', this)">📖 学び</button>
+            <button class="tab-btn" onclick="switchTab('history', this)">🏆 履歴</button>
+        </div>
+
+        <!-- 🌅 朝タブ -->
+        <div id="tab-pre" class="tab-content active">
+            <form id="form-pre">
+                <div class="glass-card">
+                     <h2 class="section-title">🌅 起床時のコンディション <span id="display-date-pre" style="font-size:14px; font-weight:900; color:var(--text-muted); margin-left:auto; background:var(--input-bg); padding:6px 12px; border-radius:10px; box-shadow:var(--shadow-inner);"></span></h2>
+                     
+                     <div class="form-group">
+                         <div class="form-label-flex">
+                             <label>睡眠時間 (時間) <span class="required-mark">必須</span></label>
+                             <button type="button" class="btn-sync" onclick="handleSyncDeviceData('睡眠時間')">⌚️ 同期</button>
+                         </div>
+                         <input type="number" id="sleep" step="0.5" placeholder="例: 7.5">
+                     </div>
+                     
+                     <div class="form-group">
+                         <div class="form-label-flex"><label>主観的な睡眠の質 <span class="required-mark">必須</span></label></div>
+                         <div class="star-rating">
+                             <input type="radio" id="star5-pre" name="sleep-quality" value="5"><label for="star5-pre">★</label>
+                             <input type="radio" id="star4-pre" name="sleep-quality" value="4"><label for="star4-pre">★</label>
+                             <input type="radio" id="star3-pre" name="sleep-quality" value="3"><label for="star3-pre">★</label>
+                             <input type="radio" id="star2-pre" name="sleep-quality" value="2"><label for="star2-pre">★</label>
+                             <input type="radio" id="star1-pre" name="sleep-quality" value="1"><label for="star1-pre">★</label>
+                         </div>
+                     </div>
+
+                     <div class="flex-row-gap">
+                         <div class="form-group w-full">
+                             <div class="form-label-flex"><label>体重 (kg)</label></div>
+                             <input type="number" id="weight" step="0.1" placeholder="例: 65.5">
+                         </div>
+                         <div class="form-group w-full">
+                             <div class="form-label-flex">
+                                 <label>心拍数</label>
+                                 <button type="button" class="btn-sync" onclick="handleSyncDeviceData('心拍数')">⌚️</button>
+                             </div>
+                             <input type="number" id="heart-rate" placeholder="例: 60">
+                         </div>
+                     </div>
+
+                     <div class="form-group highlight-box">
+                         <div class="form-label-flex">
+                             <label>疲労度 <span style="font-size:12px; font-weight:600;">(1:絶好調 〜 10:限界)</span> <span class="required-mark">必須</span></label>
+                             <div class="emoji-display" id="fatigue-display">😃 1</div>
+                         </div>
+                         <input type="range" id="fatigue" min="1" max="10" value="1" step="1">
+                     </div>
+
+                     <div class="form-group highlight-box">
+                         <div class="form-label-flex">
+                             <label>ストレス <span style="font-size:12px; font-weight:600;">(1:リラックス 〜 10:重圧)</span> <span class="required-mark">必須</span></label>
+                             <div class="emoji-display" id="stress-display">😌 1</div>
+                         </div>
+                         <input type="range" id="stress" min="1" max="10" value="1" step="1">
+                     </div>
+                     
+                     <div class="form-group">
+                         <div class="form-label-flex"><label>朝の時点での筋肉痛・張り</label></div>
+                         <div class="tags-container" id="soreness-tags-pre">
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="頭部">頭部</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="肩">肩</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="腕">腕</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="背中">背中</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="腰">腰</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="腹筋">腹筋</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="胸部">胸部</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="腸腰筋">腸腰筋</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="臀部">臀部</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="大腿四頭筋">大腿四頭筋</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="ハムストリングス">ハム</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="カーフ">カーフ</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="アキレス腱">アキレス腱</button>
+                             <button type="button" class="tag-btn tag-btn-pre" data-part="足裏">足裏</button>
+                         </div>
+                     </div>
+                     
+                     <div class="form-group danger-box">
+                         <div class="form-label-flex"><label style="color: var(--warning-text); font-size:16px;">🔥 ケガ・痛みの詳細 (朝)</label></div>
+                         <textarea id="injury-pre" rows="2" placeholder="睡眠中の違和感や、朝起きた時の痛みの状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
+                     </div>
+                </div>
+
+                <div class="irs-container">
+                    <div class="flex-between mb-3">
+                        <h4 class="mt-0 mb-0" style="font-size: 18px; font-weight:900; color: var(--text-main);">⚠️ Injury Risk Score</h4>
+                        <div style="font-size: 28px; font-weight: 900; color: var(--text-main);" id="irs-value-pre">10%</div>
+                    </div>
+                    <div class="irs-bar-bg"><div class="irs-bar-fill" id="irs-bar-pre" style="width: 10%; background-color: var(--good-text);"></div></div>
+                    <div style="font-size: 16px; font-weight: 800; text-align: right; color: var(--good-text);" id="irs-status-pre">🟢 安全圏 (Normal)</div>
+                </div>
+
+                <div class="glass-card ai-card">
+                     <h2 class="section-title" style="color: var(--primary); border-bottom:none; margin-bottom:12px;">✨ AI 事前アドバイス</h2>
+                     <div class="ai-box" id="ai-advice-pre">数値を入力すると、練習前に意識すべきポイントや怪我予防の提案を表示します。</div>
+                </div>
+
+                <button type="button" class="btn-primary" onclick="saveData('pre')">選択した日の「朝」を保存</button>
+            </form>
+        </div>
+
+        <!-- 🌙 夜タブ -->
+        <div id="tab-post" class="tab-content">
+            <form id="form-post">
+                <div class="glass-card">
+                     <h2 class="section-title">📊 トレーニング負荷 (sRPE) <span id="display-date-post" style="font-size:14px; font-weight:900; color:var(--text-muted); margin-left:auto; background:var(--input-bg); padding:6px 12px; border-radius:10px; box-shadow:var(--shadow-inner);"></span></h2>
+                     
+                     <div class="form-group">
+                         <div class="form-label-flex"><label>運動時間 (分) <span class="required-mark">必須</span></label></div>
+                         <input type="number" id="duration" placeholder="例: 120">
+                     </div>
+                     
+                     <div class="form-group highlight-box">
+                         <div class="form-label-flex">
+                             <label>RPE: 主観的きつさ <span style="font-size:12px; font-weight:600;">(0:楽 〜 10:限界)</span> <span class="required-mark">必須</span></label>
+                             <div class="emoji-display" id="rpe-display">🏃‍♂️ 5.0</div>
+                         </div>
+                         <input type="range" id="rpe" min="0" max="10" step="0.5" value="5">
+                     </div>
+                     
+                     <div class="result-box">
+                         <span style="font-size:16px; font-weight:900; color:var(--text-main);">💪 Training Load</span>
+                         <span class="result-value" id="load-result">-</span>
+                     </div>
+                </div>
+
+                <div class="glass-card" style="border: 2px solid var(--secondary);">
+                    <div class="flex-between" style="border-bottom: 2px solid var(--secondary-light); padding-bottom: 14px; margin-bottom: 18px;">
+                        <h2 class="section-title mt-0 mb-0" style="border: none; color: var(--secondary);">⏱️ 本日のスプリント記録</h2>
+                        <button type="button" onclick="addSprintRow()" class="btn-sync" style="background-color: var(--secondary); color: white; border-color: var(--secondary); margin:0;">➕ 追加</button>
+                    </div>
+                    <div id="sprint-rows-container"></div>
+                    
+                    <div style="border-top: 2px dashed rgba(249, 115, 22, 0.4); margin-top: 20px; padding-top: 20px;">
+                        <h3 class="section-title mt-0 mb-3" style="border: none; font-size: 18px; color: var(--secondary);">🔬 特殊計測 (RSI / F-vプロファイル)</h3>
+                        <div class="form-group">
+                            <div class="form-label-flex"><label>RSI (反応筋力指数)</label></div>
+                            <input type="number" id="rsi" step="0.01" placeholder="例: 2.50">
+                        </div>
+                        
+                        <div class="highlight-box" style="border-color: rgba(249, 115, 22, 0.3);">
+                            <div class="form-label-flex"><label>F-vプロファイル診断用タイム</label></div>
+                            <div class="flex-row-gap mb-3">
+                                <input type="number" id="time-30m" step="0.01" placeholder="30m (秒)" oninput="calcFv()">
+                                <input type="number" id="time-fly20m" step="0.01" placeholder="Fly 20m (秒)" oninput="calcFv()">
+                            </div>
+                            <div class="result-box mt-0" style="background: var(--secondary-light); border-color: rgba(249, 115, 22, 0.3);">
+                                <span style="font-size: 15px; font-weight:900; color:var(--text-main);">診断結果</span>
+                                <span class="result-value" id="fv-display" style="font-size: 18px; color: var(--secondary);">-</span>
+                            </div>
+                            <input type="hidden" id="fv-result" value="">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                     <h2 class="section-title">📝 練習後のダメージ確認</h2>
+                     <div class="form-group">
+                         <div class="form-label-flex"><label>練習後の筋肉痛・張り</label></div>
+                         <div class="tags-container" id="soreness-tags-post">
+                             <button type="button" class="tag-btn tag-btn-post" data-part="頭部">頭部</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="肩">肩</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="腕">腕</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="背中">背中</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="腰">腰</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="腹筋">腹筋</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="胸部">胸部</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="腸腰筋">腸腰筋</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="臀部">臀部</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="大腿四頭筋">大腿四頭筋</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="ハムストリングス">ハム</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="カーフ">カーフ</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="アキレス腱">アキレス腱</button>
+                             <button type="button" class="tag-btn tag-btn-post" data-part="足裏">足裏</button>
+                         </div>
+                     </div>
+                     <div class="form-group danger-box">
+                         <div class="form-label-flex"><label style="color: var(--warning-text); font-size:16px;">🔥 ケガ・痛みの詳細 (夜)</label></div>
+                         <textarea id="injury" rows="2" placeholder="痛みや怪我の状況があれば詳しく..." style="border-color: rgba(239,68,68,0.4); margin-bottom: 0;"></textarea>
+                     </div>
+                </div>
+
+                <div class="irs-container">
+                    <div class="flex-between mb-3">
+                        <h4 class="mt-0 mb-0" style="font-size: 18px; font-weight:900; color: var(--text-main);">⚠️ 明日の Injury Risk Score</h4>
+                        <div style="font-size: 28px; font-weight: 900; color: var(--text-main);" id="irs-value-post">10%</div>
+                    </div>
+                    <div class="irs-bar-bg"><div class="irs-bar-fill" id="irs-bar-post" style="width: 10%; background-color: var(--good-text);"></div></div>
+                    <div style="font-size: 16px; font-weight: 800; text-align: right; color: var(--good-text);" id="irs-status-post">🟢 安全圏 (Normal)</div>
+                </div>
+
+                <div class="glass-card">
+                     <h2 class="section-title">📝 練習の振り返り・ケア</h2>
+                     <div class="form-group"><div class="form-label-flex"><label>練習メニュー</label></div><textarea id="menu" rows="2" placeholder="今日のドリルや走った本数など..."></textarea></div>
+                     
+                     <div class="form-group">
+                         <div class="form-label-flex">
+                             <label>歩数 (歩)</label>
+                             <button type="button" class="btn-sync" onclick="handleSyncDeviceData('歩数')">⌚️ 同期</button>
+                         </div>
+                         <input type="number" id="steps" placeholder="例: 8000">
+                     </div>
+                     
+                     <div class="form-group"><div class="form-label-flex"><label style="color: var(--good-text);">👍 できたこと</label></div><textarea id="good" rows="2" placeholder="フォームの気づきや良かった点..."></textarea></div>
+                     <div class="form-group"><div class="form-label-flex"><label style="color: var(--warning-text);">👎 できなかったこと・課題</label></div><textarea id="bad" rows="2" placeholder="次回の練習で意識したいこと..."></textarea></div>
+                     
+                     <div class="form-group highlight-box">
+                         <div class="form-label-flex"><label style="color: var(--primary); font-size:16px;">🛁 今夜実施するケア (複数選択可)</label></div>
+                         <div class="tags-container mb-3" id="care-tags"></div>
+                         <textarea id="care" rows="2" placeholder="その他、独自のケアがあれば自由記述..." style="margin-bottom:0;"></textarea>
+                     </div>
+                </div>
+
+                <div class="glass-card ai-card">
+                     <h2 class="section-title" style="color: var(--primary); border-bottom:none; margin-bottom:12px;">✨ AI リカバリーアドバイス</h2>
+                     <div class="ai-box" id="ai-advice-post">練習の負荷やダメージ状況から、今日の夜に最適なリカバリー方法を提案します。</div>
+                </div>
+
+                <button type="button" class="btn-primary" onclick="saveData('post')">選択した日の「夜」を保存</button>
+            </form>
+        </div>
+
+        <!-- 📖 学びタブ -->
+        <div id="tab-education" class="tab-content">
+            <div class="glass-card" style="background: linear-gradient(135deg, var(--primary-light), var(--secondary-light)); border: none;">
+                <h2 class="section-title" style="border: none; margin-bottom: 8px; color: var(--primary-dark);">📖 チームの学び・資料</h2>
+                <p style="font-size: 14px; color: var(--primary-dark); margin: 0; font-weight:700;">監督からのアドバイスや、正しいケア・トレーニングの動画ライブラリです。</p>
+            </div>
+            <div class="edu-cat-container">
+                <button class="edu-cat-btn active" onclick="filterEducation('すべて', this)">すべて</button>
+                <button class="edu-cat-btn" onclick="filterEducation('ケア・リカバリー', this)">ケア</button>
+                <button class="edu-cat-btn" onclick="filterEducation('トレーニング理論', this)">理論</button>
+                <button class="edu-cat-btn" onclick="filterEducation('栄養・食事', this)">栄養</button>
+                <button class="edu-cat-btn" onclick="filterEducation('メンタル', this)">メンタル</button>
+            </div>
+            <div id="education-list-container">
+                <div class="text-center" style="padding: 40px; color: var(--text-muted); font-weight:bold; font-size:16px;">読み込み中...</div>
+            </div>
+        </div>
+
+        <!-- 🏆 履歴タブ -->
+        <div id="tab-history" class="tab-content">
+            <div class="glass-card" id="history-section" style="display: none;">
+                <div class="highlight-box mb-5">
+                    <h3 class="mt-0 mb-4" style="color:var(--primary); font-size:18px; border-bottom: 2px solid var(--primary-light); padding-bottom: 10px; font-weight:900;">🏆 自己ベスト & チーム内順位</h3>
+                    <div class="flex-row-gap mb-4">
+                        <label style="font-size: 15px; font-weight: 800; color: var(--text-main);">表示距離:</label>
+                        <select id="my-sprint-distance" class="w-full" style="padding: 12px; font-weight:bold;" onchange="renderPlayerHistory()">
+                            <option value="50" selected>50m</option><option value="60">60m</option><option value="100">100m</option>
+                            <option value="150">150m</option><option value="200">200m</option><option value="300">300m</option>
+                        </select>
+                    </div>
+                    <div class="flex-between" style="background: var(--card-bg); padding: 22px; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-inner);">
+                        <div class="w-full">
+                            <div style="font-size: 14px; color: var(--text-muted); font-weight: 800; margin-bottom:6px;">自己ベスト</div>
+                            <div style="font-size: 32px; font-weight: 900; color: var(--primary);" id="my-best-time">- 秒</div>
+                        </div>
+                        <div class="w-full text-right" style="border-left: 2px solid var(--border-color); padding-left: 15px;">
+                            <div style="font-size: 14px; color: var(--text-muted); font-weight: 800; margin-bottom:6px;">チーム内順位</div>
+                            <div style="font-size: 32px; font-weight: 900; color: var(--secondary);" id="my-team-rank">- 位</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="highlight-box">
+                    <canvas id="player-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- 🔥 チームアクティビティ -->
+            <div id="team-activity-section" class="mt-5 mb-5">
+                <h3 class="section-title">🔥 チームメイトの活躍</h3>
+                <div id="team-activity-list"></div>
+            </div>
+            
+            <div class="glass-card">
+                <h2 class="section-title">⏰ リマインダー設定</h2>
+                <p style="font-size: 14px; color: var(--text-muted); margin-top: 0; font-weight:600;">朝7時と夜20時の入力を忘れないように通知でお知らせします。</p>
+                <div class="highlight-box">
+                    <div class="flex-between">
+                        <span style="font-weight: 900; color: var(--text-main); font-size:16px;">🔔 通知機能をオンにする</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notification-toggle" onchange="toggleNotifications(this)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="notification-status" style="font-size: 13px; color: var(--warning-text); margin-top: 12px; font-weight:bold; display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- その他モーダル -->
+    <div id="daily-summary-modal" class="modal-overlay">
+        <div class="glass-card modal-content-box" style="position: relative; max-width: 500px; padding:0; overflow:hidden;">
+            <div style="position: sticky; top: 0; background: var(--card-bg); z-index: 10; padding: 20px; border-bottom: 2px solid var(--primary-light); backdrop-filter: var(--glass-blur);">
+                <h2 class="section-title flex-center mt-0 mb-0" id="summary-modal-date" style="border: none; font-size: 22px;">YYYY/MM/DD の記録</h2>
+                <button class="modal-close-btn" style="position: absolute; top: 16px; right: 20px;" onclick="closeDailySummary()">✖</button>
+            </div>
+            <div id="summary-modal-content" style="padding: 20px; overflow-y: auto;"></div>
+            <div style="padding: 20px; position: sticky; bottom: 0; background: var(--card-bg); border-top: 1px solid var(--border-color); backdrop-filter: var(--glass-blur);">
+                <button id="edit-daily-btn" class="btn-primary" style="margin-bottom: 0;" onclick="editDailyData()">この日のデータを編集する</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-modal" class="modal-overlay">
+        <div class="glass-card modal-content-box" style="position: relative; max-width: 500px; height: 85vh; padding: 0; overflow:hidden;">
+            <div class="flex-between" style="padding: 20px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--card-bg); z-index: 10; backdrop-filter: var(--glass-blur);">
+                <h2 class="mt-0 mb-0" style="font-size: 20px; color: var(--primary); font-weight: 900;">🔔 通知センター</h2>
+                <button class="modal-close-btn" style="position: static; margin: 0;" onclick="closeNotificationModal()">✖</button>
+            </div>
+            <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                <h3 style="font-size: 16px; color: var(--primary); border-bottom: 2px solid var(--primary-light); padding-bottom: 10px; font-weight: 900; margin-top: 0;">👏 もらった Kudos</h3>
+                <div id="notification-kudos-list" class="mb-5"></div>
+                
+                <h3 style="font-size: 16px; color: var(--secondary); border-bottom: 2px solid var(--secondary-light); padding-bottom: 10px; margin-top: 0; font-weight: 900;">📢 チーム全体へのお知らせ</h3>
+                <div id="notification-broadcast-list" class="mb-5"></div>
+                
+                <h3 style="font-size: 16px; color: var(--primary); border-bottom: 2px solid var(--primary-light); padding-bottom: 10px; font-weight: 900; margin-top:0;">💬 自分への個別フィードバック</h3>
+                <div id="notification-comment-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- テンプレート -->
+    <template id="sprint-row-template">
+        <div class="sprint-row flex-row-gap animate-pop-in" style="margin-bottom: 12px; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 12px;">
+            <select class="sprint-dist-input w-full" onchange="checkSprintRank(this)" style="padding: 14px; border-color: var(--secondary);">
+                <option value="">距離</option>
+                <option value="30">30m</option><option value="50">50m</option><option value="60">60m</option>
+                <option value="80">80m</option><option value="100">100m</option><option value="120">120m</option>
+                <option value="150">150m</option><option value="200">200m</option><option value="300">300m</option>
+                <option value="400">400m</option>
+            </select>
+            <input type="number" class="sprint-time-input w-full" step="0.01" placeholder="タイム(秒)" oninput="checkSprintRank(this)" style="padding: 14px; border-color: var(--secondary);">
+            <span class="sprint-rank-badge" style="min-width: 30px; text-align: center;"></span>
+            <button type="button" onclick="this.parentElement.remove(); refreshAdvicePostOnly();" style="background: none; border: none; color: var(--warning-text); font-size: 32px; cursor: pointer; padding: 0 5px; transition:transform 0.2s;">×</button>
+        </div>
+    </template>
+
+    <!-- 共通JSの読み込み -->
+    <script src="js/common/constants.js"></script>
+    <script src="js/common/utils.js"></script>
+    <script src="js/common/firebase-init.js"></script>
+    <script>
+        // モジュールからアクセスできるように window オブジェクトに紐付け
+        window.CONSTANTS = CONSTANTS;
+        window.HAPTIC = HAPTIC;
+        window.UI = UI;
+
+        // Firebase初期化を実行し、完了後に window.colRefs を設定
+        initFirebase().then(() => {
+            window.db = db;
+            window.colRefs = colRefs;
+        });
+    </script>
+
+    <!-- アプリケーション本体 (ES Modules) -->
+    <script type="module" src="js/player/main.js"></script>
+</body>
+</html>
