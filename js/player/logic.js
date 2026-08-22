@@ -1,11 +1,3 @@
-// ==========================================
-// 📌 選手用 計算・分析ロジック (Logic)
-// DOMに依存しない純粋なデータ処理関数群です
-// ==========================================
-
-/**
- * 連続入力日数(ストリーク)を計算します
- */
 export function calculateStreak(logs, currentUser) {
     const myLogs = logs.filter(l => l.playerName === currentUser);
     if (myLogs.length === 0) return 0;
