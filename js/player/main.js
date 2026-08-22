@@ -4,7 +4,6 @@ import * as ui from './ui.js';
 import * as auth from '../common/auth.js';
 import * as form from './form.js';
 
-// --- 共通モジュールのインポート ---
 import { CONSTANTS } from '../common/constants.js';
 import { HAPTIC, UI } from '../common/utils.js';
 import { initFirebase, db, colRefs } from '../common/firebase-init.js';
@@ -141,38 +140,49 @@ function updateSetupSelect() {
     }
 }
 
+// 💡 ここからが修正部分です 💡
 async function handleLinkPlayer() {
     if(window.HAPTIC) window.HAPTIC.medium(); 
     const select = document.getElementById('setup-player-select');
     const playerName = select.value;
     const user = auth.getCurrentUser();
     
-    if(!playerName || !user) { 
-        window.UI.showToast("名前を選択してください。", "warning"); return; 
+    // エラーが画面の裏に隠れないよう、ブラウザ標準のアラートで表示します
+    if(!playerName) { 
+        alert("▼ リストから自分の名前を選択してください"); 
+        return; 
+    }
+    if(!user) {
+        alert("エラー: ログイン状態が確認できません。再度ログインしてください。");
+        return;
     }
     
     const playerDoc = STATE.players.find(p => p.name === playerName);
-    if(!playerDoc) return;
+    if(!playerDoc) {
+        alert("エラー: 選手データが見つかりません。");
+        return;
+    }
 
-    window.UI.showConfirm(`「${playerName}」として登録しますか？<br><span style="font-size:12px; color:var(--color-danger);">※一度登録すると後から自分で変更できません。</span>`, async () => {
+    // ブラウザ標準の確認画面（絶対に最前面に出ます）
+    const isOk = confirm(`【確認】\n「${playerName}」としてアカウントを登録しますか？\n\n※この操作は後からやり直せません。`);
+    
+    if (isOk) {
         try {
             if (window.colRefs && window.colRefs.players) {
                 // DBに書き込みリクエストを投げる
                 await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
             }
-            
-            // 💡 修正箇所: データベースの反映を待たずに強制的にローカル状態を更新してメイン画面へ進める
+            // データベースの反映を待たずに強制的にローカル状態を更新して進める
             playerDoc.uid = user.uid;
-            window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
+            if(window.UI) window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
             checkUserLink(user);
-            
         } catch (error) {
-            // Firestoreの権限エラー（セキュリティルール）などが発生した場合
-            window.UI.showToast("紐付けに失敗しました: " + error.message, "error");
+            alert("紐付けに失敗しました:\n" + error.message);
             console.error("Link Error:", error);
         }
-    });
+    }
 }
+// 💡 ここまでが修正部分です 💡
 
 function getAuthErrorMessage(error) {
     const code = error.code;
