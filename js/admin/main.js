@@ -3,9 +3,6 @@ import * as logic from './logic.js';
 import * as ui from './ui.js';
 import * as charts from './charts.js';
 
-// ==========================================
-// 📌 アプリケーションの初期化
-// ==========================================
 async function initApp() {
     setDefaultDates();
     if (localStorage.getItem('theme') === 'dark') { 
@@ -14,32 +11,33 @@ async function initApp() {
     }
 
     try {
-        // グローバルに読み込まれた Firebase オブジェクトを使用
-        firebase.initializeApp(window.CONSTANTS.FIREBASE_CONFIG);
-        const db = firebase.firestore();
-        db.settings({ experimentalForceLongPolling: true });
-        await firebase.auth().signInAnonymously();
-        
-        window.colRefs = {
-            logs: db.collection('team_condition_logs'),
-            players: db.collection('team_players'),
-            goals: db.collection('team_goals'),
-            settings: db.collection('team_settings'),
-            edu: db.collection('team_education'),
-            broadcasts: db.collection('team_broadcasts')
-        };
+        if(window.CONSTANTS && window.CONSTANTS.FIREBASE_CONFIG) {
+            if (!firebase.apps.length) firebase.initializeApp(window.CONSTANTS.FIREBASE_CONFIG);
+            const db = firebase.firestore();
+            db.settings({ experimentalForceLongPolling: true });
+            await firebase.auth().signInAnonymously();
+            
+            window.colRefs = {
+                logs: db.collection('team_condition_logs'),
+                players: db.collection('team_players'),
+                goals: db.collection('team_goals'),
+                settings: db.collection('team_settings'),
+                edu: db.collection('team_education'),
+                broadcasts: db.collection('team_broadcasts')
+            };
 
-        document.getElementById('connection-status').textContent = 'クラウド同期中';
-        document.getElementById('connection-status').className = 'status-badge status-cloud';
+            document.getElementById('connection-status').textContent = 'クラウド同期中';
+            document.getElementById('connection-status').className = 'status-badge status-cloud';
 
-        setupListeners();
+            setupListeners();
+        } else {
+            throw new Error("CONSTANTS is not defined properly");
+        }
     } catch (error) {
         console.warn("Firebase Error", error);
         document.getElementById('connection-status').textContent = 'ローカル';
         document.getElementById('connection-status').className = 'status-badge status-local';
-        // UIモジュールはまだ初期化されていない可能性があるため、window.UIがない場合はフォールバック
         if(window.UI && window.UI.showToast) window.UI.showToast("通信エラーのため、ローカルデータで起動します", "warning");
-        else alert("通信エラーのため、ローカルデータで起動します");
         loadLocalData();
     }
 }
@@ -53,9 +51,6 @@ function setDefaultDates() {
     if (reportMonthEl) reportMonthEl.value = ym;
 }
 
-// ==========================================
-// 📌 Firebase イベントリスナー & ローカルデータフォールバック
-// ==========================================
 function setupListeners() {
     window.colRefs.players.onSnapshot(snapshot => {
         STATE.players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -140,9 +135,6 @@ function updateCountdownUI() {
     }
 }
 
-// ==========================================
-// 📌 UI 更新統合管理
-// ==========================================
 function updateAdminUI() {
     ui.updatePeriodFilterOptions(STATE.logs); 
     ui.updatePlayerSelect(STATE.players); 
@@ -158,7 +150,6 @@ function filterAndRenderTable() {
     
     ui.renderTableData(STATE.filteredLogs, 'history-table-body', true, STATE.players, deleteLog, openCommentModal, openDetailModal);
     
-    // 現在開いているビューに応じて更新
     const viewIndividual = document.getElementById('view-individual'); 
     if (viewIndividual && viewIndividual.style.display === 'block') updateCharts();
     
@@ -193,11 +184,6 @@ function updateCharts() {
     }
 }
 
-// ==========================================
-// 📌 データ操作 (CRUD)
-// ==========================================
-
-// --- ケア項目 ---
 async function addCareOption() {
     const val = document.getElementById('new-care-input').value.trim();
     if(!val) return;
@@ -217,7 +203,6 @@ function deleteCareOption(index) {
     }
 }
 
-// --- 選手管理 ---
 function addPlayer() {
     const input = document.getElementById('new-player-name'); 
     const catInput = document.getElementById('new-player-category');
@@ -242,7 +227,6 @@ function deletePlayer(id) {
     }
 }
 
-// --- 目標管理 ---
 function renderGoalsTable() {
     const tbody = document.getElementById('goals-table-body'); 
     if (!tbody) return; 
@@ -299,7 +283,6 @@ async function saveTeamSettings() {
     }
 }
 
-// --- 教育コンテンツ ---
 async function addEducation() {
     const title = document.getElementById('edu-title').value.trim(); 
     const category = document.getElementById('edu-category').value;
@@ -356,34 +339,6 @@ function deleteEducation(id) {
     }
 }
 
-// --- ログ削除・リセット ---
-function deleteLog(playerName, date) {
-    if(window.UI) {
-        window.UI.showConfirm(`本当に削除しますか？`, async () => {
-            const docId = `${playerName}_${date}`;
-            if (window.colRefs && window.colRefs.logs) { 
-                await window.colRefs.logs.doc(docId).delete(); 
-                window.UI.showToast('削除しました', 'success'); 
-            }
-        });
-    }
-}
-
-function clearAllData() {
-    if(window.UI) {
-        window.UI.showConfirm("全データを削除しますか？<br><span style='font-size:13px; color:var(--color-danger);'>※この操作は取り消せません。</span>", async () => {
-            if (window.colRefs && window.colRefs.logs) {
-                const snapshot = await window.colRefs.logs.get(); 
-                snapshot.docs.forEach(doc => doc.ref.delete()); 
-                window.UI.showToast('全データを削除しました', 'success');
-            }
-        });
-    }
-}
-
-// ==========================================
-// 📌 ブロードキャスト & 個別コメント
-// ==========================================
 function openBroadcastModal() { document.getElementById('broadcast-modal').style.display = 'flex'; }
 function closeBroadcastModal() { document.getElementById('broadcast-modal').style.display = 'none'; }
 
@@ -441,7 +396,6 @@ function deleteBroadcast(id) {
 }
 
 let currentCommentTarget = null;
-
 function openCommentModal(playerName, date) {
     currentCommentTarget = { playerName, date };
     const log = STATE.logs.find(l => l.playerName === playerName && l.date === date);
@@ -520,9 +474,30 @@ function closeDetailModal() {
     document.getElementById('detail-modal').style.display = 'none';
 }
 
-// ==========================================
-// 📌 エクスポート・その他の機能
-// ==========================================
+function deleteLog(playerName, date) {
+    if(window.UI) {
+        window.UI.showConfirm(`本当に削除しますか？`, async () => {
+            const docId = `${playerName}_${date}`;
+            if (window.colRefs && window.colRefs.logs) { 
+                await window.colRefs.logs.doc(docId).delete(); 
+                window.UI.showToast('削除しました', 'success'); 
+            }
+        });
+    }
+}
+
+function clearAllData() {
+    if(window.UI) {
+        window.UI.showConfirm("全データを削除しますか？<br><span style='font-size:13px; color:var(--color-danger);'>※この操作は取り消せません。</span>", async () => {
+            if (window.colRefs && window.colRefs.logs) {
+                const snapshot = await window.colRefs.logs.get(); 
+                snapshot.docs.forEach(doc => doc.ref.delete()); 
+                window.UI.showToast('全データを削除しました', 'success');
+            }
+        });
+    }
+}
+
 function downloadCSV() {
     const logs = STATE.filteredLogs || [];
     if (logs.length === 0) { 
@@ -588,13 +563,9 @@ function toggleTheme() {
     if(STATE.charts.rsi) STATE.charts.rsi.update();
 }
 
-// ==========================================
-// グローバルスコープへのバインディング
-// ==========================================
 window.toggleTheme = toggleTheme;
 window.switchTab = ui.switchTab;
 window.openHistoryView = (viewId) => ui.openHistoryView(viewId, (id) => {
-    // view展開時のコールバック
     if(id === 'individual') updateCharts();
     if(id === 'goals') renderGoalsTable();
     if(id === 'education') renderEducationTable();
