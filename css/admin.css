@@ -1,0 +1,173 @@
+/* ==========================================
+   🎨 管理画面 テーマカラー
+   ========================================== */
+:root {
+    --primary: #1e3a8a; --primary-dark: #172554; --primary-light: #dbeafe; --primary-alpha: rgba(30, 58, 138, 0.15);
+    --secondary: #7c3aed; --secondary-light: #f3e8ff; --secondary-alpha: rgba(124, 58, 237, 0.15);
+    --accent: #2563eb; --accent-light: #eff6ff;
+    
+    --bg-color: #f1f5f9; --card-bg: rgba(255, 255, 255, 0.85); --input-bg: rgba(248, 250, 252, 0.8);
+    --border-color: rgba(0, 0, 0, 0.08); --border-light: rgba(0, 0, 0, 0.04);
+    
+    --text-main: #0f172a; --text-muted: #64748b; --text-white: #ffffff;
+    
+    --color-danger: #ef4444; --color-danger-light: rgba(239, 68, 68, 0.1);
+    --color-success: #10b981; --color-success-light: rgba(16, 185, 129, 0.1);
+    --color-warning: #f59e0b; --color-warning-light: rgba(245, 158, 11, 0.1);
+    --color-info: #3b82f6;
+    
+    --shadow-lg: 0 20px 40px -15px rgba(30, 58, 138, 0.2);
+}
+
+body.dark-mode {
+    --primary: #60a5fa; --primary-dark: #3b82f6; --primary-light: rgba(59, 130, 246, 0.15); --primary-alpha: rgba(59, 130, 246, 0.25);
+    --secondary: #a78bfa; --secondary-light: rgba(167, 139, 250, 0.15); --secondary-alpha: rgba(167, 139, 250, 0.25);
+    --accent: #3b82f6; --accent-light: rgba(59, 130, 246, 0.15);
+    
+    --bg-color: #020617; --card-bg: rgba(15, 23, 42, 0.85); --input-bg: rgba(30, 41, 59, 0.6);
+    --border-color: rgba(255, 255, 255, 0.1); --border-light: rgba(255, 255, 255, 0.05);
+    
+    --text-main: #f8fafc; --text-muted: #94a3b8;
+    
+    --shadow-lg: 0 20px 40px -15px rgba(59, 130, 246, 0.2);
+}
+
+/* ==========================================
+   📱 レイアウト & ヘッダー
+   ========================================== */
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+header { 
+    background: linear-gradient(135deg, var(--primary), var(--secondary)); 
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text-white); padding: 14px 24px; font-size: 22px; font-weight: 900; position: sticky; top: 0; z-index: 100; 
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; 
+    border-bottom: 1px solid rgba(255,255,255,0.2); transition: background 0.3s var(--ease-out-expo);
+}
+.theme-toggle-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 16px; cursor: pointer; padding: 6px 14px; color: white; border-radius: 20px; display: flex; align-items: center; transition: all 0.2s; backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-sm);}
+.theme-toggle-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.05); }
+
+/* ==========================================
+   🖱 ボタン (Admin)
+   ========================================== */
+.btn { padding: 12px 20px; border-radius: 14px; font-weight: 800; cursor: pointer; border: none; transition: all 0.3s var(--ease-out-expo); font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-shadow: var(--shadow-sm); letter-spacing: 0.5px; }
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-md); filter: brightness(1.05); }
+.btn:active:not(:disabled) { transform: scale(0.96); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+.btn-success { background: linear-gradient(135deg, var(--secondary), var(--primary)); color: var(--text-white); box-shadow: 0 4px 15px var(--primary-alpha); }
+.btn-danger { background: var(--color-danger); color: var(--text-white); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
+.btn-info { background: var(--accent); color: var(--text-white); box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
+
+.back-btn { background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px 18px; border-radius: 12px; font-weight: 800; cursor: pointer; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; box-shadow: var(--shadow-sm); transition: all 0.2s; }
+.back-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); transform: translateX(-4px); }
+
+/* ==========================================
+   📊 ダッシュボードサマリー
+   ========================================== */
+.dashboard-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.summary-card { background: var(--card-bg); border-radius: 18px; padding: 20px; text-align: center; border-top: 6px solid var(--primary); box-shadow: var(--shadow-md); backdrop-filter: var(--glass-blur); transition: transform 0.3s var(--ease-out-expo), box-shadow 0.3s; }
+.summary-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.summary-title { font-size: 13px; font-weight: 900; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;}
+.summary-value { font-size: 32px; font-weight: 900; color: var(--text-main); text-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+.alert-card { border-top-color: var(--color-danger); background-color: var(--color-danger-light); } .alert-card .summary-value { color: var(--color-danger); } 
+.warning-card { border-top-color: var(--color-warning); background-color: var(--color-warning-light); } .warning-card .summary-value { color: var(--color-warning); } 
+.danger-card { border-top-color: var(--secondary); background-color: var(--secondary-light); } .danger-card .summary-value { color: var(--secondary); }
+.info-card { border-top-color: var(--primary); } .info-card .summary-value { color: var(--primary); } 
+.critical-card { border-top-color: #991b1b; background-color: rgba(153, 27, 27, 0.05); } .critical-card .summary-value { color: #991b1b; }
+
+.missing-list, .danger-list, .alert-list, .critical-list { font-size: 13px; margin-top: 8px; min-height: 18px; font-weight: 700;}
+.missing-list { color: var(--text-muted); } .danger-list { color: var(--secondary); } .alert-list { color: var(--color-danger); } .critical-list { color: #991b1b; }
+
+/* ==========================================
+   📋 テーブル
+   ========================================== */
+.table-responsive { overflow-x: auto; padding-bottom: 12px; }
+.data-table-wrapper { background: var(--card-bg); border-radius: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border-color); box-shadow: var(--shadow-md); }
+table.data-table { width: 100%; border-collapse: collapse; min-width: 1750px; font-size: 14px; }
+table.data-table th, table.data-table td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-main); vertical-align: middle; }
+table.data-table th { background-color: var(--primary-light); color: var(--primary-dark); font-weight: 900; white-space: nowrap; font-size: 13px; letter-spacing: 0.5px;}
+table.data-table tr { transition: background-color 0.2s; }
+table.data-table tr:nth-child(even) { background-color: var(--input-bg); }
+table.data-table tr:hover { background-color: var(--primary-alpha) !important; }
+
+.tag-text { background-color: var(--secondary-light); color: var(--secondary); border: 1px solid var(--secondary); padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-right: 4px; display: inline-block; margin-bottom: 4px; font-weight: 800;}
+.tag-text-post { background-color: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-right: 4px; display: inline-block; margin-bottom: 4px; font-weight: 800;}
+.status-badge { font-size: 12px; padding: 4px 10px; border-radius: 12px; margin-left: 10px; font-weight: 900; box-shadow: var(--shadow-sm);}
+.status-local { background-color: var(--text-muted); color: white; border: 1px solid var(--border-color); }
+.status-cloud { background-color: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5); backdrop-filter: var(--glass-blur); }
+
+/* ==========================================
+   🖼 モーダル追加スタイル & スタンプ
+   ========================================== */
+.history-view { display: none; animation: fadeInUp 0.4s var(--ease-out-expo) forwards; }
+.stamp-btn { font-size: 28px; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 16px; background: var(--input-bg); cursor: pointer; transition: all 0.2s var(--ease-out-expo); display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);}
+.stamp-btn:hover { background: var(--card-bg); transform: scale(1.1) translateY(-2px); border-color: var(--primary-alpha); }
+.stamp-btn.selected { border-color: var(--primary); background: var(--primary-light); transform: scale(1.1); box-shadow: 0 4px 15px var(--primary-alpha); }
+
+/* ==========================================
+   🗂 過去ログメニューグリッド
+   ========================================== */
+.history-menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.menu-card { background: var(--card-bg); border-radius: 18px; padding: 30px 20px; text-align: center; font-weight: 900; font-size: 16px; color: var(--text-main); border: 2px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; transition: all 0.3s var(--ease-out-expo); box-shadow: var(--shadow-md); backdrop-filter: var(--glass-blur); }
+.menu-card span { font-size: 40px; transition: transform 0.3s; text-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+.menu-card:hover { background: var(--primary-light); border-color: var(--primary); transform: translateY(-5px); box-shadow: var(--shadow-lg); color: var(--primary); }
+.menu-card:hover span { transform: scale(1.15) translateY(-5px); }
+
+.analysis-container { display: flex; flex-wrap: wrap; gap: 24px; }
+.chart-area { flex: 2; min-width: 320px; padding-top: 10px; }
+.stats-area { flex: 1; min-width: 260px; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; box-shadow: var(--shadow-md); backdrop-filter: var(--glass-blur);}
+
+/* ==========================================
+   🔥 ヒートマップ
+   ========================================== */
+.heatmap-container { display: flex; justify-content: center; gap: 60px; align-items: center; padding: 30px 20px; background-color: var(--input-bg); border-radius: 16px; border: 1px solid var(--border-color); box-shadow: var(--shadow-inner); }
+.human-body { width: 130px; flex-shrink: 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+.human-body svg { width: 100%; height: auto; display: block; }
+.heat-spot { transition: opacity 0.6s var(--ease-out-expo); mix-blend-mode: multiply; }
+body.dark-mode .heat-spot { mix-blend-mode: screen; }
+
+/* ==========================================
+   🔬 F-vプロファイル & ランキング
+   ========================================== */
+.fv-groups-container { display: flex; flex-direction: column; gap: 16px; }
+.fv-group-row { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; box-shadow: var(--shadow-md); }
+.fv-group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color); }
+.fv-group-title { font-size: 16px; font-weight: 900; display: flex; align-items: center; gap: 8px;}
+.fv-force .fv-group-title { color: var(--color-danger); } .fv-force .fv-group-header { border-bottom-color: var(--color-danger-light); }
+.fv-balanced .fv-group-title { color: var(--color-success); } .fv-balanced .fv-group-header { border-bottom-color: var(--color-success-light); }
+.fv-velocity .fv-group-title { color: var(--primary); } .fv-velocity .fv-group-header { border-bottom-color: var(--primary-light); }
+.fv-player-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.fv-player-tag { padding: 8px 14px; border-radius: 20px; font-size: 14px; display: flex; align-items: center; gap: 8px; font-weight: 800; box-shadow: var(--shadow-sm); background: var(--input-bg); border: 1px solid var(--border-color); transition: transform 0.2s; }
+.fv-player-tag:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.fv-player-ratio { font-size: 12px; color: #fff; font-weight: 900; background: var(--text-muted); padding: 4px 8px; border-radius: 12px; }
+
+.ranking-table { margin: 10px auto; border-collapse: separate; border-spacing: 0; font-size: 14px; background: var(--card-bg); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color); table-layout: fixed; box-shadow: var(--shadow-md); }
+.ranking-table th, .ranking-table td { padding: 12px 10px; border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color); text-align: center; color: var(--text-main); }
+.ranking-table th:last-child, .ranking-table td:last-child { border-right: none; }
+.ranking-table tr:last-child td { border-bottom: none; }
+.ranking-table th { background-color: var(--secondary-light); color: var(--secondary); font-weight: 900;}
+.ranking-table tr:nth-child(even) td { background-color: var(--input-bg); }
+.ranking-title { font-size: 16px; font-weight: 900; color: var(--secondary); margin-top: 20px; margin-bottom: 12px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;}
+
+/* ==========================================
+   👥 選手名簿タグ
+   ========================================== */
+.roster-container { display: flex; flex-wrap: wrap; gap: 10px; }
+.player-tag { padding: 8px 16px; border-radius: 24px; font-size: 14px; display: inline-flex; align-items: center; font-weight: 800; background: var(--card-bg); border: 2px solid var(--primary-light); color: var(--text-main); margin-bottom: 6px; box-shadow: var(--shadow-sm); transition: all 0.2s;}
+.player-tag:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.delete-player-btn { background: none; border: none; color: var(--color-danger); cursor: pointer; font-size: 20px; padding: 0; line-height: 1; margin-left: 10px; display: flex; align-items: center; justify-content: center; transition: transform 0.2s;}
+.delete-player-btn:hover { transform: scale(1.2); }
+
+/* ==========================================
+   🖨 印刷用スタイル
+   ========================================== */
+@media print {
+    body { background-color: white; margin: 0; padding: 0; color: #333; }
+    body > * { display: none !important; }
+    #print-report-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 20px; box-sizing: border-box; }
+    #print-report-area * { visibility: visible; color: #333; }
+    .no-print { display: none !important; }
+    @page { margin: 10mm; }
+}
