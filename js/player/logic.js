@@ -1,3 +1,6 @@
+/**
+ * 連続入力日数(ストリーク)を計算します
+ */
 export function calculateStreak(logs, currentUser) {
     const myLogs = logs.filter(l => l.playerName === currentUser);
     if (myLogs.length === 0) return 0;
@@ -115,7 +118,8 @@ export function checkPersonalBestAll(newSprints, playerName, otherLogs) {
  */
 export function calcIrsScore(type, data, sorenessList) {
     let score = 5; 
-    const W = window.CONSTANTS.IRS_WEIGHTS;
+    // 💡修正ポイント: THRESHOLDS の中から参照するようにパスを修正
+    const W = window.CONSTANTS && window.CONSTANTS.THRESHOLDS ? window.CONSTANTS.THRESHOLDS.IRS_WEIGHTS : null;
     if (!W) return 0;
     
     if (type === 'pre') {
