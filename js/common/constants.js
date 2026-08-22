@@ -1,6 +1,3 @@
-=========================================
-// 📌 共通定数 (Shared Constants)
-// ==========================================
 export const CONSTANTS = {
     FIREBASE_CONFIG: {
         apiKey: "AIzaSyAQoESOlZIGJfOgfIwpkL0r0YcYu4tl8ZQ",
