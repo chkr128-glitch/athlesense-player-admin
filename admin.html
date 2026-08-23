@@ -219,6 +219,11 @@
                     </select>
                 </div>
 
+                <!-- 💡 追加: 過去データ読み込みボタン -->
+                <div class="text-center mb-5" id="load-more-container">
+                    <button id="load-more-btn" class="btn btn-outline w-full" style="padding: 14px; font-weight: 800; font-size: 15px;" onclick="handleLoadOlderData()">📥 さらに過去のデータをクラウドから読み込む</button>
+                </div>
+
                 <!-- メニューグリッド -->
                 <div id="history-menu" class="history-menu-grid">
                     <div class="menu-card" onclick="openHistoryView('teamTrend')"><span>📈</span>チーム全体推移</div>
