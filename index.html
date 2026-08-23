@@ -56,14 +56,14 @@
         </div>
     </div>
 
-    <!-- 1. ローディング画面 (初期状態確認用) -->
-    <div id="loading-screen" class="container flex-center" style="min-height: 80vh; flex-direction: column; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999;">
+    <!-- 1. ローディング画面 -->
+    <div id="loading-screen" class="container flex-center" style="min-height: 100vh; flex-direction: column; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999;">
         <div style="font-size: 40px; margin-bottom: 16px; animation: popIn 1s infinite alternate;">🏃‍♂️</div>
         <div style="font-size: 18px; font-weight: 900; color: var(--primary);">認証情報を確認中...</div>
     </div>
 
     <!-- 2. 認証画面 (固定オーバーレイ＆はみ出し防止) -->
-    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); background-image: radial-gradient(circle at top right, var(--primary-light), transparent 60%), radial-gradient(circle at bottom left, var(--secondary-light), transparent 60%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
+    <div id="auth-screen" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-color); background-image: radial-gradient(circle at top right, #fce7f3, transparent 70%), radial-gradient(circle at bottom left, #ffedd5, transparent 70%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
         
         <div class="animate-fade-in-up" style="text-align: center; margin-bottom: 30px; width: 100%; max-width: 380px;">
             <div style="font-size: 56px; margin-bottom: 10px; text-shadow: 0 4px 12px rgba(236,72,153,0.3);">🏃‍♂️</div>
@@ -120,7 +120,7 @@
     <!-- メインアプリ -->
     <div id="main-app" class="container hidden">
         
-        <!-- ヘッダー (メインアプリの中に移動し、非表示時は完全に消えるように修正) -->
+        <!-- ヘッダー -->
         <header>
             <div class="header-left">
                 <button id="theme-toggle" class="header-icon-btn" onclick="toggleTheme()">🌙</button>
@@ -140,7 +140,7 @@
         </header>
 
         <!-- 天候ウィジェット -->
-        <div class="weather-widget animate-fade-in-up" id="weather-widget" style="margin-top: 60px;"> <!-- ヘッダーの高さ分のマージンを追加 -->
+        <div class="weather-widget animate-fade-in-up" id="weather-widget" style="margin-top: 60px;">
             <div class="flex-between" style="font-weight: 900; color: var(--weather-text); font-size: 18px;">
                 <span>📍 <span id="location-text">現在地を取得中...</span></span>
                 <span id="temp-text" style="font-size: 26px;">-- ℃</span>
@@ -492,6 +492,11 @@
                 <div class="highlight-box">
                     <canvas id="player-chart"></canvas>
                 </div>
+            </div>
+
+            <!-- 💡 追加: 過去データ読み込みボタン -->
+            <div class="text-center mt-3 mb-5" id="load-more-container">
+                <button id="load-more-btn" class="tag-btn" style="width: 100%; padding: 14px; font-size: 14px; font-weight: 800; border: 2px solid var(--secondary); background: transparent; color: var(--secondary); box-shadow: none; margin-bottom: 0;" onclick="handleLoadOlderData()">📥 さらに過去のデータを読み込む</button>
             </div>
 
             <!-- 🔥 チームアクティビティ -->
