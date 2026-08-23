@@ -16,6 +16,9 @@ let playersLoaded = false;
 let mainAppInitialized = false;
 let isListenersSetup = false;
 
+// 💡 アーカイブ用のログ保持配列 (過去データ読み込み用)
+STATE.archivedLogs = [];
+
 // ==========================================
 // 初期化プロセス
 // ==========================================
@@ -140,14 +143,12 @@ function updateSetupSelect() {
     }
 }
 
-// 💡 ここからが修正部分です 💡
 async function handleLinkPlayer() {
     if(window.HAPTIC) window.HAPTIC.medium(); 
     const select = document.getElementById('setup-player-select');
     const playerName = select.value;
     const user = auth.getCurrentUser();
     
-    // エラーが画面の裏に隠れないよう、ブラウザ標準のアラートで表示します
     if(!playerName) { 
         alert("▼ リストから自分の名前を選択してください"); 
         return; 
@@ -163,16 +164,13 @@ async function handleLinkPlayer() {
         return;
     }
 
-    // ブラウザ標準の確認画面（絶対に最前面に出ます）
     const isOk = confirm(`【確認】\n「${playerName}」としてアカウントを登録しますか？\n\n※この操作は後からやり直せません。`);
     
     if (isOk) {
         try {
             if (window.colRefs && window.colRefs.players) {
-                // DBに書き込みリクエストを投げる
                 await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
             }
-            // データベースの反映を待たずに強制的にローカル状態を更新して進める
             playerDoc.uid = user.uid;
             if(window.UI) window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
             checkUserLink(user);
@@ -182,7 +180,6 @@ async function handleLinkPlayer() {
         }
     }
 }
-// 💡 ここまでが修正部分です 💡
 
 function getAuthErrorMessage(error) {
     const code = error.code;
@@ -235,6 +232,12 @@ async function handleLogout() {
 // データフロー・Firebase購読
 // ==========================================
 function setupFirebaseListeners() {
+    // 💡 取得するデータの期間を「過去60日分」に制限
+    const limitDate = new Date();
+    limitDate.setDate(limitDate.getDate() - 60);
+    const dateLimitStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth()+1).padStart(2,'0')}-${String(limitDate.getDate()).padStart(2,'0')}`;
+    const timeLimitStr = limitDate.toISOString();
+
     if(window.colRefs.players) { 
         window.colRefs.players.onSnapshot(snapshot => { 
             STATE.players = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})); 
@@ -269,9 +272,21 @@ function setupFirebaseListeners() {
             if(eduTab && eduTab.classList.contains('active')) window.renderEducationList();
         });
     }
+    
+    // 💡 ログデータの取得: 過去60日間に制限 ＋ 過去データとの結合
     if(window.colRefs.logs) { 
-        window.colRefs.logs.onSnapshot(snapshot => { 
-            STATE.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)); 
+        const logsQuery = window.colRefs.logs.where("date", ">=", dateLimitStr);
+        logsQuery.onSnapshot(snapshot => { 
+            const liveLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
+            
+            // アーカイブ(過去)データと、リアルタイム(直近)データをマージして重複を排除
+            const allLogsMap = new Map();
+            STATE.archivedLogs.forEach(log => allLogsMap.set(log.id, log));
+            liveLogs.forEach(log => allLogsMap.set(log.id, log));
+            
+            // 降順(新しい順)にソートしてSTATEに保存
+            STATE.logs = Array.from(allLogsMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+            
             if(STATE.currentUser) { 
                 ui.renderCalendar(handleDateSelect); 
                 const dInput = document.getElementById('date'); 
@@ -287,8 +302,10 @@ function setupFirebaseListeners() {
             } 
         }); 
     }
+    
     if(window.colRefs.kudos) { 
-        window.colRefs.kudos.onSnapshot(snapshot => { 
+        const kudosQuery = window.colRefs.kudos.where("createdAt", ">=", timeLimitStr);
+        kudosQuery.onSnapshot(snapshot => { 
             STATE.kudos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
             if (STATE.currentUser) { 
                 updateGlobalNotifications(); ui.renderTeamActivities(handleSendKudos); 
@@ -296,10 +313,72 @@ function setupFirebaseListeners() {
         }); 
     }
     if(window.colRefs.broadcasts) { 
-        window.colRefs.broadcasts.onSnapshot(snapshot => { 
+        const broadcastQuery = window.colRefs.broadcasts.where("createdAt", ">=", timeLimitStr);
+        broadcastQuery.onSnapshot(snapshot => { 
             STATE.broadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); 
             if (STATE.currentUser) { updateGlobalNotifications(); updateBroadcastBanner(); } 
         }); 
+    }
+}
+
+// 💡 追加: 過去データをさらに読み込む機能
+async function handleLoadOlderData() {
+    if(window.HAPTIC) window.HAPTIC.light();
+    const btn = document.getElementById('load-more-btn');
+    if(btn) { btn.disabled = true; btn.textContent = '読み込み中...'; }
+    
+    // 現在持っているログの中で最も古い日付を取得
+    let oldestDateStr = '';
+    if(STATE.logs && STATE.logs.length > 0) {
+        oldestDateStr = STATE.logs[STATE.logs.length - 1].date;
+    } else {
+        const d = new Date(); d.setDate(d.getDate() - 60);
+        oldestDateStr = d.toISOString().split('T')[0];
+    }
+    
+    // さらに60日前を計算
+    const oldestDate = new Date(oldestDateStr);
+    const targetDate = new Date(oldestDate);
+    targetDate.setDate(targetDate.getDate() - 60);
+    const targetDateStr = targetDate.toISOString().split('T')[0];
+    
+    try {
+        if(!window.colRefs.logs) throw new Error("Database not initialized");
+        
+        // 過去60日分の範囲を指定して1度だけ取得 (get)
+        const snapshot = await window.colRefs.logs
+            .where("date", "<", oldestDateStr)
+            .where("date", ">=", targetDateStr)
+            .get();
+            
+        if(snapshot.empty) {
+            window.UI.showToast("これ以上過去のデータはありません", "info");
+            if(btn) { btn.style.display = 'none'; }
+            return;
+        }
+        
+        const olderLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        STATE.archivedLogs = [...STATE.archivedLogs, ...olderLogs];
+        
+        // ログの再構築
+        const allLogsMap = new Map();
+        STATE.archivedLogs.forEach(log => allLogsMap.set(log.id, log));
+        STATE.logs.forEach(log => allLogsMap.set(log.id, log));
+        STATE.logs = Array.from(allLogsMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // UI更新
+        ui.renderCalendar(handleDateSelect);
+        const historyTab = document.getElementById('tab-history'); 
+        if(historyTab && historyTab.classList.contains('active')) { 
+            ui.renderPlayerHistory(); 
+        }
+        
+        window.UI.showToast(`${olderLogs.length}件の過去データを読み込みました`, "success");
+        if(btn) { btn.disabled = false; btn.textContent = '📥 さらに過去のデータを読み込む'; }
+    } catch(e) {
+        console.error(e);
+        window.UI.showToast("データの読み込みに失敗しました", "error");
+        if(btn) { btn.disabled = false; btn.textContent = '📥 さらに過去のデータを読み込む'; }
     }
 }
 
@@ -314,23 +393,6 @@ function initMainAppUI() {
     }, 100);
     
     updateGlobalNotifications();
-}
-
-function loadLocalData() {
-    STATE.players = JSON.parse(localStorage.getItem('team_players') || '[]'); 
-    ui.updateLoginSelect();
-    STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]').sort((a, b) => new Date(b.date) - new Date(a.date));
-    STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}'); 
-    STATE.kudos = JSON.parse(localStorage.getItem('team_kudos') || '[]'); 
-    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}'); 
-    
-    ui.renderCareTags(); 
-    ui.updateCountdownUI(); 
-    if(STATE.currentUser) { 
-        ui.renderPlayerGoal(); 
-        ui.renderCalendar(handleDateSelect); 
-        ui.updateHeaderStreak(); 
-    }
 }
 
 // ==========================================
@@ -835,6 +897,7 @@ window.handleEmailRegister = handleEmailRegister;
 window.handleGoogleLogin = handleGoogleLogin;
 window.handleLinkPlayer = handleLinkPlayer;
 window.handleLogout = handleLogout;
+window.handleLoadOlderData = handleLoadOlderData; // 💡 追加
 window.saveData = form.saveData;
 window.switchTab = switchTab;
 window.toggleTheme = toggleTheme;

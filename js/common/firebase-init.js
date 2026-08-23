@@ -15,8 +15,17 @@ export async function initFirebase(CONSTANTS) {
         db = firebase.firestore();
         db.settings({ experimentalForceLongPolling: true });
         
-        // 🚨 修正: 以前の signInAnonymously() (匿名ログイン) を削除しました
-        // 今後は auth.js を通じて明示的にログインを行います。
+        // 💡 修正: ローカルキャッシュ（オフライン永続化）を有効にして読み取り回数を大幅削減
+        try {
+            await db.enablePersistence();
+            console.log("Firebase Cache Enabled");
+        } catch (err) {
+            if (err.code == 'failed-precondition') {
+                console.warn('複数タブが開かれているため、キャッシュが有効になりませんでした。');
+            } else if (err.code == 'unimplemented') {
+                console.warn('このブラウザはキャッシュをサポートしていません。');
+            }
+        }
         
         // 共通で利用するコレクション群
         colRefs = {
@@ -27,7 +36,7 @@ export async function initFirebase(CONSTANTS) {
             edu: db.collection('team_education'),
             broadcasts: db.collection('team_broadcasts'),
             kudos: db.collection('team_kudos'),
-            adminUsers: db.collection('admin_users') // 👔 追加: 管理者名簿
+            adminUsers: db.collection('admin_users') // 管理者名簿
         };
 
         return true;
