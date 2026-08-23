@@ -4,6 +4,7 @@ import * as ui from './ui.js';
 import * as auth from '../common/auth.js';
 import * as form from './form.js';
 
+// --- 共通モジュールのインポート ---
 import { CONSTANTS } from '../common/constants.js';
 import { HAPTIC, UI } from '../common/utils.js';
 import { initFirebase, db, colRefs } from '../common/firebase-init.js';
@@ -140,14 +141,12 @@ function updateSetupSelect() {
     }
 }
 
-// 💡 ここからが修正部分です 💡
 async function handleLinkPlayer() {
     if(window.HAPTIC) window.HAPTIC.medium(); 
     const select = document.getElementById('setup-player-select');
     const playerName = select.value;
     const user = auth.getCurrentUser();
     
-    // エラーが画面の裏に隠れないよう、ブラウザ標準のアラートで表示します
     if(!playerName) { 
         alert("▼ リストから自分の名前を選択してください"); 
         return; 
@@ -163,16 +162,13 @@ async function handleLinkPlayer() {
         return;
     }
 
-    // ブラウザ標準の確認画面（絶対に最前面に出ます）
     const isOk = confirm(`【確認】\n「${playerName}」としてアカウントを登録しますか？\n\n※この操作は後からやり直せません。`);
     
     if (isOk) {
         try {
             if (window.colRefs && window.colRefs.players) {
-                // DBに書き込みリクエストを投げる
                 await window.colRefs.players.doc(playerDoc.id).update({ uid: user.uid });
             }
-            // データベースの反映を待たずに強制的にローカル状態を更新して進める
             playerDoc.uid = user.uid;
             if(window.UI) window.UI.showToast(`${playerName} さん、ようこそ！`, "success");
             checkUserLink(user);
@@ -182,7 +178,6 @@ async function handleLinkPlayer() {
         }
     }
 }
-// 💡 ここまでが修正部分です 💡
 
 function getAuthErrorMessage(error) {
     const code = error.code;
@@ -232,9 +227,15 @@ async function handleLogout() {
 }
 
 // ==========================================
-// データフロー・Firebase購読
+// データフロー・Firebase購読 (💡 ここから大きく変更)
 // ==========================================
 function setupFirebaseListeners() {
+    // 💡 取得するデータの期間を「過去60日分」に制限するための日付文字列を作成
+    const limitDate = new Date();
+    limitDate.setDate(limitDate.getDate() - 60);
+    const dateLimitStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth()+1).padStart(2,'0')}-${String(limitDate.getDate()).padStart(2,'0')}`;
+    const timeLimitStr = limitDate.toISOString();
+
     if(window.colRefs.players) { 
         window.colRefs.players.onSnapshot(snapshot => { 
             STATE.players = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})); 
@@ -245,6 +246,7 @@ function setupFirebaseListeners() {
             if (user) checkUserLink(user); 
         }); 
     }
+    
     if(window.colRefs.settings) { 
         window.colRefs.settings.doc('general').onSnapshot(doc => { 
             if(doc.exists) { 
@@ -254,12 +256,14 @@ function setupFirebaseListeners() {
             } else { ui.renderCareTags(); } 
         }); 
     }
+    
     if(window.colRefs.goals) {
         window.colRefs.goals.onSnapshot(snapshot => {
             STATE.goals = {}; snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
             if(STATE.currentUser) ui.renderPlayerGoal();
         });
     }
+    
     if(window.colRefs.edu) {
         window.colRefs.edu.onSnapshot(snapshot => {
             STATE.education = [];
@@ -269,8 +273,12 @@ function setupFirebaseListeners() {
             if(eduTab && eduTab.classList.contains('active')) window.renderEducationList();
         });
     }
+    
+    // 💡 ログデータの取得: 過去60日間に制限
     if(window.colRefs.logs) { 
-        window.colRefs.logs.onSnapshot(snapshot => { 
+        const logsQuery = window.colRefs.logs.where("date", ">=", dateLimitStr);
+        logsQuery.onSnapshot(snapshot => { 
+            // fromCache をチェックすることで、キャッシュからかサーバーからかが分かります（今回はログ出ししませんが通信量が減ります）
             STATE.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)); 
             if(STATE.currentUser) { 
                 ui.renderCalendar(handleDateSelect); 
@@ -287,16 +295,22 @@ function setupFirebaseListeners() {
             } 
         }); 
     }
+    
+    // 💡 Kudosの取得: 過去60日間に制限
     if(window.colRefs.kudos) { 
-        window.colRefs.kudos.onSnapshot(snapshot => { 
+        const kudosQuery = window.colRefs.kudos.where("createdAt", ">=", timeLimitStr);
+        kudosQuery.onSnapshot(snapshot => { 
             STATE.kudos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
             if (STATE.currentUser) { 
                 updateGlobalNotifications(); ui.renderTeamActivities(handleSendKudos); 
             } 
         }); 
     }
+    
+    // 💡 お知らせの取得: 過去60日間に制限
     if(window.colRefs.broadcasts) { 
-        window.colRefs.broadcasts.onSnapshot(snapshot => { 
+        const broadcastQuery = window.colRefs.broadcasts.where("createdAt", ">=", timeLimitStr);
+        broadcastQuery.onSnapshot(snapshot => { 
             STATE.broadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); 
             if (STATE.currentUser) { updateGlobalNotifications(); updateBroadcastBanner(); } 
         }); 
@@ -314,23 +328,6 @@ function initMainAppUI() {
     }, 100);
     
     updateGlobalNotifications();
-}
-
-function loadLocalData() {
-    STATE.players = JSON.parse(localStorage.getItem('team_players') || '[]'); 
-    ui.updateLoginSelect();
-    STATE.logs = JSON.parse(localStorage.getItem('team_condition_logs') || '[]').sort((a, b) => new Date(b.date) - new Date(a.date));
-    STATE.settings = JSON.parse(localStorage.getItem('team_settings') || '{}'); 
-    STATE.kudos = JSON.parse(localStorage.getItem('team_kudos') || '[]'); 
-    STATE.goals = JSON.parse(localStorage.getItem('team_goals') || '{}'); 
-    
-    ui.renderCareTags(); 
-    ui.updateCountdownUI(); 
-    if(STATE.currentUser) { 
-        ui.renderPlayerGoal(); 
-        ui.renderCalendar(handleDateSelect); 
-        ui.updateHeaderStreak(); 
-    }
 }
 
 // ==========================================
