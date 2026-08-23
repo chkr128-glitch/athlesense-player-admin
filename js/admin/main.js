@@ -16,7 +16,6 @@ window.UI = UI;
 
 let isAppInitialized = false;
 
-/* STREAMING_CHUNK:Initializing Application... */
 // ==========================================
 // 初期化プロセス
 // ==========================================
@@ -51,7 +50,6 @@ function setDefaultDates() {
     if (reportMonthEl) reportMonthEl.value = ym;
 }
 
-/* STREAMING_CHUNK:Authentication & Admin Verification... */
 // ==========================================
 // 認証・ルーティング・キーコード検証
 // ==========================================
@@ -187,9 +185,8 @@ async function handleLogout() {
     }); 
 }
 
-/* STREAMING_CHUNK:Data Fetching & Subscriptions... */
 // ==========================================
-// データフロー・Firebase購読
+// データフロー・Firebase購読 (💡 取得期間を制限)
 // ==========================================
 function initMainApp() {
     document.getElementById('connection-status').textContent = 'クラウド同期中';
@@ -198,52 +195,74 @@ function initMainApp() {
 }
 
 function setupListeners() {
-    window.colRefs.players.onSnapshot(snapshot => {
-        STATE.players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        STATE.players.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        ui.renderPlayersList(STATE.players, deletePlayer);
-        updateAdminUI();
-    });
+    // 💡 取得するデータの期間を「過去60日分」に制限するための日付文字列を作成
+    const limitDate = new Date();
+    limitDate.setDate(limitDate.getDate() - 60);
+    const dateLimitStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth()+1).padStart(2,'0')}-${String(limitDate.getDate()).padStart(2,'0')}`;
+    const timeLimitStr = limitDate.toISOString();
 
-    window.colRefs.logs.onSnapshot(snapshot => {
-        STATE.logs = snapshot.docs.map(doc => doc.data());
-        STATE.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
-        updateAdminUI();
-    });
-    
-    window.colRefs.broadcasts.onSnapshot(snapshot => {
-        STATE.broadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        STATE.broadcasts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        const modal = document.getElementById('broadcast-list-modal');
-        if (modal && modal.style.display === 'flex') ui.renderBroadcastList(STATE.broadcasts, STATE.players, deleteBroadcast);
-    });
-    
-    window.colRefs.settings.doc('general').onSnapshot(doc => {
-        if(doc.exists) {
-            STATE.settings = doc.data();
-            STATE.careOptions = STATE.settings.careOptions || window.CONSTANTS.DEFAULT_CARES;
-            const viewCare = document.getElementById('view-careSettings');
-            if (viewCare && viewCare.style.display === 'block') ui.renderCareOptions(STATE.careOptions, deleteCareOption);
-            updateCountdownUI();
-        } else {
-            STATE.careOptions = window.CONSTANTS.DEFAULT_CARES;
-        }
-    });
+    if(window.colRefs.players) {
+        window.colRefs.players.onSnapshot(snapshot => {
+            STATE.players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            STATE.players.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            ui.renderPlayersList(STATE.players, deletePlayer);
+            updateAdminUI();
+        });
+    }
 
-    window.colRefs.goals.onSnapshot(snapshot => {
-        STATE.goals = {}; 
-        snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
-        const viewGoals = document.getElementById('view-goals');
-        if (viewGoals && viewGoals.style.display === 'block') renderGoalsTable();
-    });
+    // 💡 ログデータの取得: 過去60日間に制限
+    if(window.colRefs.logs) {
+        const logsQuery = window.colRefs.logs.where("date", ">=", dateLimitStr);
+        logsQuery.onSnapshot(snapshot => {
+            STATE.logs = snapshot.docs.map(doc => doc.data());
+            STATE.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+            updateAdminUI();
+        });
+    }
     
-    window.colRefs.edu.onSnapshot(snapshot => {
-        STATE.education = []; 
-        snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
-        STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        const viewEdu = document.getElementById('view-education');
-        if (viewEdu && viewEdu.style.display === 'block') renderEducationTable();
-    });
+    // 💡 お知らせの取得: 過去60日間に制限
+    if(window.colRefs.broadcasts) {
+        const broadcastQuery = window.colRefs.broadcasts.where("createdAt", ">=", timeLimitStr);
+        broadcastQuery.onSnapshot(snapshot => {
+            STATE.broadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            STATE.broadcasts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const modal = document.getElementById('broadcast-list-modal');
+            if (modal && modal.style.display === 'flex') ui.renderBroadcastList(STATE.broadcasts, STATE.players, deleteBroadcast);
+        });
+    }
+    
+    if(window.colRefs.settings) {
+        window.colRefs.settings.doc('general').onSnapshot(doc => {
+            if(doc.exists) {
+                STATE.settings = doc.data();
+                STATE.careOptions = STATE.settings.careOptions || window.CONSTANTS.DEFAULT_CARES;
+                const viewCare = document.getElementById('view-careSettings');
+                if (viewCare && viewCare.style.display === 'block') ui.renderCareOptions(STATE.careOptions, deleteCareOption);
+                updateCountdownUI();
+            } else {
+                STATE.careOptions = window.CONSTANTS.DEFAULT_CARES;
+            }
+        });
+    }
+
+    if(window.colRefs.goals) {
+        window.colRefs.goals.onSnapshot(snapshot => {
+            STATE.goals = {}; 
+            snapshot.forEach(doc => { STATE.goals[doc.id] = doc.data(); });
+            const viewGoals = document.getElementById('view-goals');
+            if (viewGoals && viewGoals.style.display === 'block') renderGoalsTable();
+        });
+    }
+    
+    if(window.colRefs.edu) {
+        window.colRefs.edu.onSnapshot(snapshot => {
+            STATE.education = []; 
+            snapshot.forEach(doc => { STATE.education.push({ id: doc.id, ...doc.data() }); });
+            STATE.education.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const viewEdu = document.getElementById('view-education');
+            if (viewEdu && viewEdu.style.display === 'block') renderEducationTable();
+        });
+    }
 }
 
 function loadLocalData() {
@@ -301,7 +320,6 @@ function updateAdminUI() {
     updateTodayView();
 }
 
-/* STREAMING_CHUNK:Table Rendering & Data Management... */
 // ==========================================
 // データの描画と操作
 // ==========================================
@@ -502,7 +520,6 @@ function deleteEducation(id) {
     }
 }
 
-/* STREAMING_CHUNK:Communications & Modals... */
 // ==========================================
 // コミュニケーション機能・モーダル制御
 // ==========================================
